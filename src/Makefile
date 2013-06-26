@@ -788,11 +788,12 @@ linux-x86-clang-debug:
 		CPP="clang" CC="clang" AS="clang" LD="clang" CXX="clang++"
 	@echo "All done"
 
+
 linux-arm32le-neon:
 	$(LN) arm32le.h arch.h
 	$(MAKE) $(PROJ) \
 		JOHN_OBJS="$(JOHN_OBJS) c3_fmt.o" \
-		CFLAGS="$(CFLAGS) -mfpu=neon -DHAVE_CRYPT" \
+		CFLAGS="$(CFLAGS) -mfpu=neon -DHAVE_CRYPT -DHAVE_SCRYPT" \
 		LDFLAGS="$(LDFLAGS) -lcrypt"
 
 linux-arm32le:
