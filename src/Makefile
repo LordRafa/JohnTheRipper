@@ -207,6 +207,13 @@ BENCH_MD5_OBJS_DEPEND = \
 
 BENCH_BF_OBJS_DEPEND = \
 	BF_fmt.o BF_std.o
+	
+
+ESCRYPT_ARM_OBJS = \
+	sha256.o crypto_scrypt-common.o crypto_scrypt-ref.o
+
+ESCRYPT_SSE_OBJS = \
+	sha256.o crypto_scrypt-common.o crypto_scrypt-sse.o
 
 BENCH_OBJS = \
     $(MPIOBJ) \
@@ -488,8 +495,8 @@ linux-x86-64i:
 	$(LN) x86-64.h arch.h
 	@echo "#define JOHN_BLD" '"'$@'"' > john_build_rule.h
 	$(MAKE) $(PROJ) \
-		JOHN_OBJS="$(JOHN_OBJS) c3_fmt.o x86-64.o sse-intrinsics-64.o" \
-		CFLAGS="$(CFLAGS) -DHAVE_CRYPT -DHAVE_DL -DUSING_ICC_S_FILE" \
+		JOHN_OBJS="$(JOHN_OBJS) $(ESCRYPT_SSE_OBJS) lordrafa_scrypt_fmt.o c3_fmt.o x86-64.o sse-intrinsics-64.o" \
+		CFLAGS="$(CFLAGS) -DHAVE_SCRYPT -DHAVE_CRYPT -DHAVE_DL -DUSING_ICC_S_FILE" \
 		LDFLAGS="$(LDFLAGS) -lcrypt -ldl"
 	@echo "Failing after this point just means some helper tools did not build:"
 	$(MAKE) $(PROJ_CXX)
@@ -792,7 +799,7 @@ linux-x86-clang-debug:
 linux-arm32le-neon:
 	$(LN) arm32le.h arch.h
 	$(MAKE) $(PROJ) \
-		JOHN_OBJS="$(JOHN_OBJS) c3_fmt.o" \
+		JOHN_OBJS="$(JOHN_OBJS) $(ESCRYPT_ARM_OBJS) lordrafa_scrypt_fmt.o c3_fmt.o" \
 		CFLAGS="$(CFLAGS) -mfpu=neon -DHAVE_CRYPT -DHAVE_SCRYPT" \
 		LDFLAGS="$(LDFLAGS) -lcrypt"
 
@@ -1971,6 +1978,18 @@ common_opencl_pbkdf2.o: common_opencl_pbkdf2.h common_opencl_pbkdf2.c
 
 opencl_mscash2_fmt.o: common_opencl_pbkdf2.h common_opencl_pbkdf2.o opencl_mscash2_fmt.c
 	$(CC)  $(CFLAGS) opencl_mscash2_fmt.c -o opencl_mscash2_fmt.o
+
+sha256.o: escrypt/sysendian.h escrypt/sha256.h escrypt/sha256.c
+	$(CC) $(CFLAGS) $(OPT_NORMAL) escrypt/sha256.c
+
+crypto_scrypt-common.o: escrypt/crypto_scrypt.h escrypt/crypto_scrypt-common.c
+	$(CC) $(CFLAGS) $(OPT_NORMAL) escrypt/crypto_scrypt-common.c
+
+crypto_scrypt-ref.o: escrypt/sysendian.h escrypt/sha256.h escrypt/crypto_scrypt.h escrypt/crypto_scrypt-ref.c
+	$(CC) $(CFLAGS) $(OPT_NORMAL) escrypt/crypto_scrypt-ref.c
+
+crypto_scrypt-sse.o: escrypt/sysendian.h escrypt/sha256.h escrypt/crypto_scrypt.h escrypt/crypto_scrypt-sse.c
+	$(CC) $(CFLAGS) $(OPT_NORMAL) escrypt/crypto_scrypt-sse.c
 
 ../run/john: $(JOHN_OBJS)
 	$(LD) $(JOHN_OBJS) $(LDFLAGS) -o ../run/john
