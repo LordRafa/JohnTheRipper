@@ -52,7 +52,8 @@ JOHN_OBJS = \
 	recovery.o rpp.o rules.o signals.o single.o status.o tty.o wordlist.o \
 	unshadow.o \
 	unafs.o \
-	unique.o
+	unique.o \
+	sha256.o crypto_scrypt-common.o crypto_scrypt.o lordrafa_scrypt_fmt.o
 
 BENCH_DES_OBJS_ORIG = \
 	DES_fmt.o DES_std.o
@@ -907,6 +908,15 @@ miscnl.o: misc.c
 
 john.o: john.c
 	$(CC) $(CFLAGS_MAIN) $(OPT_NORMAL) $*.c
+
+sha256.o: escrypt/sysendian.h escrypt/sha256.h escrypt/sha256.c
+	$(CC) $(CFLAGS) $(OPT_NORMAL) escrypt/sha256.c
+
+crypto_scrypt-common.o: escrypt/crypto_scrypt.h escrypt/crypto_scrypt-common.c
+	$(CC) $(CFLAGS) $(OPT_NORMAL) escrypt/crypto_scrypt-common.c
+
+crypto_scrypt.o: escrypt/sysendian.h escrypt/sha256.h escrypt/crypto_scrypt.h escrypt/crypto_scrypt.c
+	$(CC) $(CFLAGS) $(OPT_NORMAL) escrypt/crypto_scrypt.c
 
 .c.o:
 	$(CC) $(CFLAGS) $(OPT_NORMAL) $*.c

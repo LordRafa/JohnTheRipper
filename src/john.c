@@ -69,6 +69,7 @@ extern struct fmt_main fmt_AFS, fmt_LM;
 #ifdef HAVE_CRYPT
 extern struct fmt_main fmt_crypt;
 #endif
+extern struct fmt_main fmt_scrypt_lordrafa;
 extern struct fmt_main fmt_trip;
 extern struct fmt_main fmt_dummy;
 
@@ -108,7 +109,8 @@ static void john_register_all(void)
 	john_register_one(&fmt_dummy);
 #ifdef HAVE_CRYPT
 	john_register_one(&fmt_crypt);
-#endif
+#endif   
+   john_register_one(&fmt_scrypt_lordrafa);
 
 	if (!fmt_list) {
 		fprintf(stderr, "Unknown ciphertext format name requested\n");
