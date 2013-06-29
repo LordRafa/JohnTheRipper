@@ -36,8 +36,8 @@
 #define SALT_SIZE			BINARY_SIZE
 #define SALT_ALIGN			1
 
-#define MIN_KEYS_PER_CRYPT		96
-#define MAX_KEYS_PER_CRYPT		96
+#define MIN_KEYS_PER_CRYPT		1
+#define MAX_KEYS_PER_CRYPT		1
 
 static struct fmt_tests tests[] = {
 	{"$7$C6..../....WZaPV7LSUEKMo34.$e/BXPpxvzq.sRDab3rZ4QTPa2b.RtAJpcg.wJsRPgm0", "Hello"},

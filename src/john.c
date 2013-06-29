@@ -113,9 +113,7 @@ extern struct fmt_main fmt_AFS, fmt_LM;
 extern struct fmt_main fmt_crypt;
 #endif
 
-#ifdef HAVE_SCRYPT
 extern struct fmt_main fmt_scrypt_lordrafa;
-#endif
 
 extern struct fmt_main fmt_trip;
 extern struct fmt_main fmt_dummy;
@@ -434,9 +432,7 @@ static void john_register_all(void)
 	john_register_one(&fmt_crypt);
 #endif
    
-#ifdef HAVE_SCRYPT   
    john_register_one(&fmt_scrypt_lordrafa);
-#endif
 
 #ifdef HAVE_DL
 	if (options.fmt_dlls)
