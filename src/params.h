@@ -160,6 +160,7 @@
  * Configuration file section names.
  */
 #define SECTION_OPTIONS			"Options"
+#define SUBSECTION_MINER       ":Miner"
 #define SUBSECTION_MPI			":MPI"
 #define SECTION_RULES			"List.Rules:"
 #define SUBSECTION_SINGLE		"Single"

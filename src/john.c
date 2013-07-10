@@ -19,6 +19,11 @@
 #define NEED_OS_FORK
 #include "os.h"
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+
 #include <stdio.h>
 #if HAVE_UNISTD_H
 #include <unistd.h>
@@ -1231,10 +1236,60 @@ static void john_done(void)
 	cleanup_tiny_memory();
 }
 
+static int miner_pause()
+{
+   
+   char *miner_api_host = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAPIHost");
+   char *miner_api_port = cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAPIPort");
+   struct hostent *ip;
+   struct sockaddr_in serv;
+   int sock;
+
+   ip = gethostbyname(miner_api_host);
+
+   sock = socket(AF_INET, SOCK_STREAM, 0);
+   if (sock == -1) {
+      printf("Socket initialisation failed.\n");
+   }
+
+   memset(&serv, 0, sizeof(serv));
+   serv.sin_family = AF_INET;
+   serv.sin_addr = *((struct in_addr *)ip->h_addr);
+   serv.sin_port = htons(miner_api_port);
+   
+   if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr)) >= 0) {
+      send(sock, "quit", strlen("quit"), 0);
+      return 1;
+   }
+   
+   return 0;
+}
+
+
+static void miner_start(int miner)
+{
+   if (cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAfterEnd"))
+      miner = 1;
+   
+   if (miner) {
+      char *miner_pool_url = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerPoolURL");
+      char *miner_pool_usr = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerPoolUSR");
+      char *miner_pool_pwd = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerPoolPWD");
+      char *miner_api_host = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAPIHost");
+      char *miner_api_port = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAPIPort");
+      
+      char *argv[] = {miner_pool_url, miner_pool_usr, miner_pool_pwd, "--api-listen", miner_api_host, miner_api_port, NULL};
+      char *envp[] = {NULL};
+      execve("./miner_wrap", argv, envp);
+   }
+
+}
+
 int main(int argc, char **argv)
 {
 	char *name;
 	unsigned int time;
+   int miner;
 
 #ifdef _MSC_VER
    // Send all reports to STDOUT
@@ -1398,12 +1453,15 @@ int main(int argc, char **argv)
 	if (options.status_interval)
 		timer_status = time + options.status_interval;
 
-	john_run();
-	john_done();
+   miner = miner_pause();
+   john_run();
+   john_done();
 
 #ifdef _MSC_VER
 	_CrtDumpMemoryLeaks();
 #endif
+   
+   miner_start(miner);
 
 	return exit_status;
 }
