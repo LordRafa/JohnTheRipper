@@ -1284,10 +1284,12 @@ static int miner_pause()
    if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr)) >= 0) {
       if (!(send(sock, "gpucount", strlen("gpucount"), 0) < 0)) {
          if (get_data(buf, sock)) {
-            //strchr
+            nextobj++ = strchr(buf, '|');
+            scanf("GPUS,Count=%d", numgpu);
          }
       }
    }
+   printf("DD=%d\n", numgpu);
    /*for (i = 0; i < numgpu; i++) {
       sprintf(command, "devdetails|%d", i);
       if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr)) >= 0) {
