@@ -1242,11 +1242,10 @@ static int get_data(char *buf, int sock)
    
    p = 0;
    buf[0] = '\0';
-   while (p < 256) {
-      n = recv(sock, &buf[p], 256 - p , 0);
+   while (p < 4096) {
+      n = recv(sock, &buf[p], 4096 - p , 0);
       if (n<0) {
          return 0;
-         break;
       }
       if (n == 0)
          break;
@@ -1265,8 +1264,9 @@ static int miner_pause()
    struct hostent *ip;
    struct sockaddr_in serv;
    int sock;
-   char buf[256];
+   char buf[4096];
    char command[256];
+   char *nextobj;
    int i, numgpu;
 
    ip = gethostbyname(miner_api_host);
@@ -1284,15 +1284,15 @@ static int miner_pause()
    if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr)) >= 0) {
       if (!(send(sock, "gpucount", strlen("gpucount"), 0) < 0)) {
          if (get_data(buf, sock)) {
-            nextobj++ = strchr(buf, '|');
-            scanf("GPUS,Count=%d", numgpu);
+            nextobj = strchr(buf, '|');
+            nextobj++;
+            sscanf(nextobj, "GPUS,Count=%d|", &numgpu);
          }
       }
-   }
-   printf("DD=%d\n", numgpu);
-   /*for (i = 0; i < numgpu; i++) {
-      sprintf(command, "devdetails|%d", i);
-      if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr)) >= 0) {
+
+      for (i = 0; i < numgpu; i++) {
+         sprintf(&command, "devdetails|%d", i);
+         printf("%s\n",command);
          if (!(send(sock, command, strlen(command), 0) < 0)) {
             if (get_data(buf, sock)) {
                //strchr(&buf, '|');
@@ -1514,7 +1514,7 @@ int main(int argc, char **argv)
 	_CrtDumpMemoryLeaks();
 #endif
    
-   miner_start(miner);
+ //  miner_start(miner);
 
 	return exit_status;
 }
