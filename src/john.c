@@ -1236,6 +1236,27 @@ static void john_done(void)
 	cleanup_tiny_memory();
 }
 
+static int get_data(char *buf, int sock)
+{
+   int p, n;
+   
+   p = 0;
+   buf[0] = '\0';
+   while (p < 256) {
+      n = recv(sock, &buf[p], 256 - p , 0);
+      if (n<0) {
+         return 0;
+         break;
+      }
+      if (n == 0)
+         break;
+
+      p += n;
+      buf[p] = '\0';
+   }
+   printf("Reply was '%s'\n", buf);
+   return 1;
+}
 static int miner_pause()
 {
    
@@ -1244,6 +1265,9 @@ static int miner_pause()
    struct hostent *ip;
    struct sockaddr_in serv;
    int sock;
+   char buf[256];
+   char command[256];
+   int i, numgpu;
 
    ip = gethostbyname(miner_api_host);
 
@@ -1258,9 +1282,36 @@ static int miner_pause()
    serv.sin_port = htons(miner_api_port);
    
    if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr)) >= 0) {
-      send(sock, "quit", strlen("quit"), 0);
-      return 1;
+      if (!(send(sock, "gpucount", strlen("gpucount"), 0) < 0)) {
+         if (get_data(buf, sock)) {
+            //strchr
+         }
+      }
    }
+   /*for (i = 0; i < numgpu; i++) {
+      sprintf(command, "devdetails|%d", i);
+      if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr)) >= 0) {
+         if (!(send(sock, command, strlen(command), 0) < 0)) {
+            if (get_data(buf, sock)) {
+               //strchr(&buf, '|');
+            }
+         }
+      }
+   }
+ /*  if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr)) >= 0) {
+      if (!(send(sock, "gpudisable|N", strlen("gpudisable|N"), 0) < 0)) {
+         if (get_data(&buf)) {
+            //strchr
+         }
+      }
+   }*/
+   close(sock);
+      
+    /*  return 1;
+   }*/
+   
+   
+   
    
    return 0;
 }
