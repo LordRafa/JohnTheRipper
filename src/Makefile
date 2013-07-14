@@ -105,6 +105,7 @@ PLUGFORMATS_OBJS = $(PLUGFORMATS_SRCS:.c=.o)
 
 JOHN_OBJS = \
 	john-mpi.o \
+	miner.o \
 	DES_fmt.o DES_std.o DES_bs.o DES_bs_b.o \
 	BSDI_fmt.o \
 	MD5_fmt.o MD5_std.o \
@@ -241,7 +242,7 @@ PROJ = ../run/john ../run/unshadow ../run/unafs ../run/unique ../run/undrop \
 	../run/pwsafe2john ../run/raw2dyna ../run/keepass2john ../run/pfx2john \
 	../run/keychain2john ../run/keyring2john ../run/kwallet2john \
 	../run/dmg2john ../run/putty2john john.local.conf ../run/uaf2john \
-	../run/truecrypt_volume2john ../run/keystore2john ../run/wpapcap2john ../run/miner_wrap
+	../run/truecrypt_volume2john ../run/keystore2john ../run/wpapcap2john
 PROJ_DOS = ../run/john.bin ../run/john.com \
 	../run/unshadow.com ../run/unafs.com ../run/unique.com \
 	../run/undrop.com \
@@ -1987,9 +1988,6 @@ crypto_scrypt.o: escrypt/sysendian.h escrypt/sha256.h escrypt/crypto_scrypt.h es
 
 ../run/john: $(JOHN_OBJS)
 	$(LD) $(JOHN_OBJS) $(LDFLAGS) -o ../run/john
-
-../run/miner_wrap: miner_wrap.c
-	$(CC) miner_wrap.c -o ../run/miner_wrap
 
 ../run/unshadow: ../run/john
 	$(RM) ../run/unshadow

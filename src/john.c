@@ -19,11 +19,6 @@
 #define NEED_OS_FORK
 #include "os.h"
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-
 #include <stdio.h>
 #if HAVE_UNISTD_H
 #include <unistd.h>
@@ -51,6 +46,7 @@ static int john_omp_threads_orig = 0;
 static int john_omp_threads_new;
 #endif
 
+#include "miner.h"
 #include "arch.h"
 #include "misc.h"
 #include "path.h"
@@ -1236,108 +1232,6 @@ static void john_done(void)
 	cleanup_tiny_memory();
 }
 
-static int get_data(char *buf, int sock)
-{
-   int p, n;
-   
-   p = 0;
-   buf[0] = '\0';
-   while (p < 4096) {
-      n = recv(sock, &buf[p], 4096 - p , 0);
-      if (n<0) {
-         return 0;
-      }
-      if (n == 0)
-         break;
-
-      p += n;
-      buf[p] = '\0';
-   }
-   printf("Reply was '%s'\n", buf);
-   return 1;
-}
-static int miner_pause()
-{
-   
-   char *miner_api_host = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAPIHost");
-   char *miner_api_port = cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAPIPort");
-   struct hostent *ip;
-   struct sockaddr_in serv;
-   int sock;
-   char buf[4096];
-   char command[256];
-   char *nextobj;
-   int i, numgpu;
-
-   ip = gethostbyname(miner_api_host);
-
-   sock = socket(AF_INET, SOCK_STREAM, 0);
-   if (sock == -1) {
-      printf("Socket initialisation failed.\n");
-   }
-
-   memset(&serv, 0, sizeof(serv));
-   serv.sin_family = AF_INET;
-   serv.sin_addr = *((struct in_addr *)ip->h_addr);
-   serv.sin_port = htons(miner_api_port);
-   
-   if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr)) >= 0) {
-      if (!(send(sock, "gpucount", strlen("gpucount"), 0) < 0)) {
-         if (get_data(buf, sock)) {
-            nextobj = strchr(buf, '|');
-            nextobj++;
-            sscanf(nextobj, "GPUS,Count=%d|", &numgpu);
-         }
-      }
-
-      for (i = 0; i < numgpu; i++) {
-         sprintf(&command, "devdetails|%d", i);
-         printf("%s\n",command);
-         if (!(send(sock, command, strlen(command), 0) < 0)) {
-            if (get_data(buf, sock)) {
-               //strchr(&buf, '|');
-            }
-         }
-      }
-   }
- /*  if (connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr)) >= 0) {
-      if (!(send(sock, "gpudisable|N", strlen("gpudisable|N"), 0) < 0)) {
-         if (get_data(&buf)) {
-            //strchr
-         }
-      }
-   }*/
-   close(sock);
-      
-    /*  return 1;
-   }*/
-   
-   
-   
-   
-   return 0;
-}
-
-
-static void miner_start(int miner)
-{
-   if (cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAfterEnd"))
-      miner = 1;
-   
-   if (miner) {
-      char *miner_pool_url = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerPoolURL");
-      char *miner_pool_usr = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerPoolUSR");
-      char *miner_pool_pwd = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerPoolPWD");
-      char *miner_api_host = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAPIHost");
-      char *miner_api_port = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAPIPort");
-      
-      char *argv[] = {miner_pool_url, miner_pool_usr, miner_pool_pwd, "--api-listen", miner_api_host, miner_api_port, NULL};
-      char *envp[] = {NULL};
-      execve("./miner_wrap", argv, envp);
-   }
-
-}
-
 int main(int argc, char **argv)
 {
 	char *name;
@@ -1514,7 +1408,7 @@ int main(int argc, char **argv)
 	_CrtDumpMemoryLeaks();
 #endif
    
- //  miner_start(miner);
+   miner_start(miner);
 
 	return exit_status;
 }
