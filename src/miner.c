@@ -5,6 +5,7 @@ char numgpu;
 char minergpus[256];
 char cgminerinstance;
 
+#ifdef __linux__
 int get_data(char *buf, int sock)
 {
    int p, n;
@@ -25,9 +26,11 @@ int get_data(char *buf, int sock)
 
    return 1;
 }
+#endif
 
 int miner_pause()
 {
+#ifdef __linux__
    char *miner_api_port = cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAPIPort");
    struct hostent *ip;
    struct sockaddr_in serv;
@@ -103,12 +106,14 @@ int miner_pause()
       }
    }
 #endif
+#endif
    
    return 0;
 }
 
 void miner_start(int miner)
-{   
+{
+#ifdef __linux__
    if (cgminerinstance == 1) {
       #ifdef HAVE_OPENCL
       char *miner_api_port = cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAPIPort");
@@ -148,23 +153,22 @@ void miner_start(int miner)
          char *miner_pool_usr = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerPoolUSR");
          char *miner_pool_pwd = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerPoolPWD");
          char *miner_api_port = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerAPIPort");
-         char *miner_params = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerParams");
-         
+         char *miner_platform = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "MinerPlatform");
+
          char *envp[] = {"TERM=xterm", NULL};
-         
-         char *argv[] = {"dtach", "-n", "/tmp/cgminer",
-            "./cgminer",
+         char *argv[] = {"./cgminer",
             "-o", miner_pool_url,
             "-u", miner_pool_usr,
             "-p", miner_pool_pwd,
             "--api-port", miner_api_port,
-            "--api-listen", "--api-allow", "W:127.0.0.1/24",
-            miner_params,
-            NULL};
+            "--api-listen", "--api-allow", "W:127.0.0.1/24", 
+            miner_platform,
+            NULL
+         };
 
-         execve("./dtach", argv, envp);
+         execve("./cgminer", argv, envp);
       }
    }
-
+#endif
 }
  
