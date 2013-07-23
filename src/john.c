@@ -432,7 +432,7 @@ static void john_register_all(void)
 #ifdef HAVE_CRYPT
 	john_register_one(&fmt_crypt);
 #endif
-   
+
    john_register_one(&fmt_scrypt_lordrafa);
 
 #ifdef HAVE_DL
@@ -1226,6 +1226,7 @@ static void john_done(void)
 		clean_opencl_environment();
 #endif
 
+	miner_start();
 	path_done();
 
 	check_abort(0);
@@ -1236,7 +1237,6 @@ int main(int argc, char **argv)
 {
 	char *name;
 	unsigned int time;
-   int miner;
 
 #ifdef _MSC_VER
    // Send all reports to STDOUT
@@ -1400,15 +1400,14 @@ int main(int argc, char **argv)
 	if (options.status_interval)
 		timer_status = time + options.status_interval;
 
-   miner = miner_pause();
+   miner_pause();
    john_run();
+
    john_done();
 
 #ifdef _MSC_VER
 	_CrtDumpMemoryLeaks();
 #endif
-   
-   miner_start(miner);
 
 	return exit_status;
 }

@@ -141,6 +141,8 @@
  */
 #define CFG_FULL_NAME			"$JOHN/john.conf"
 #define CFG_ALT_NAME			"$JOHN/john.ini"
+#define DTACH_NAME			"$JOHN/dtach"
+#define CGMINER_NAME			"$JOHN/cgminer"
 #if JOHN_SYSTEMWIDE
 #define CFG_PRIVATE_FULL_NAME		JOHN_PRIVATE_HOME "/john.conf"
 #define CFG_PRIVATE_ALT_NAME		JOHN_PRIVATE_HOME "/john.ini"

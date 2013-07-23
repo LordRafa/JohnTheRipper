@@ -1,3 +1,0 @@
-cgminer-adl.o: adl.c config.h
-
-config.h:
