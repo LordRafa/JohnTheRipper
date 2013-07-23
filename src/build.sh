@@ -3,15 +3,15 @@
 if [ $1 = "clean" ]; then
 
   make $1
-  cd cgminer; make clean; rm ../../run/cgminer; rm ../../run/*.cl; cd ..
-  cd dtach; make clean; rm ../../run/dtach
+  cd cgminer; make distclean; rm ../../run/cgminer; rm ../../run/*.cl; cd ..
+  cd dtach; make distclean; rm ../../run/dtach
   echo "all ok" && exit 0
 
-else 
+else
 
   if [ `uname -m` = "x86_64" ]; then
     LDFLAGS="-L/opt/AMDAPP/lib/x86_64/"
-  else 
+  else
     LDFLAGS="-L/opt/AMDAPP/lib/x86"
   fi
 
