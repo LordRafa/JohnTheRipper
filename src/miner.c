@@ -112,7 +112,7 @@ void miner_pause()
 					sock = send_data(command, api_port);
 					if (sock == INVSOCK)
 					{
-						fprintf(stderr, "Error: Disabling device %d from platform %d.\n",
+						fprintf(stderr, "Warning: Disabling device %d from platform %d.\n",
 						    dev_id, platform_id);
 					}
 				}
@@ -142,7 +142,7 @@ void miner_start()
 				sock = send_data(command, api_port);
 				if (sock == INVSOCK)
 				{
-					fprintf(stderr, "Error: Renabling device %d from platform %d.\n",
+					fprintf(stderr, "Warning: Renabling device %d from platform %d.\n",
 					    get_device_id(minergpus[i]), get_platform_id(minergpus[i]));
 				}
 				CLOSESOCKET(sock);
