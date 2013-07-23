@@ -17,7 +17,7 @@ else
 
   make $1 && \
   CFLAGS="-O2 -Wall -march=native -I/opt/AMDAPP/include/" && \
-  cd cgminer && ./configure --enable-cpumining --enable-scrypt --without-curses && make && mv cgminer ../../run && cp *.cl ../../run && cd .. && \
+  cd cgminer && ./configure --enable-cpumining --enable-scrypt && make && mv cgminer ../../run && cp *.cl ../../run && cd .. && \
   cd dtach && ./configure && make && mv dtach ../../run/  && \
   echo "all ok" && exit 0
 

@@ -1079,6 +1079,7 @@ static void john_init(char *name, int argc, char **argv)
 	if (any_opencl_device_exists())
 		init_opencl_devices();
 #endif
+	miner_pause();
 
 	common_init();
 	sig_init();
@@ -1400,7 +1401,6 @@ int main(int argc, char **argv)
 	if (options.status_interval)
 		timer_status = time + options.status_interval;
 
-   miner_pause();
    john_run();
 
    john_done();

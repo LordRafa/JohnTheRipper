@@ -2,6 +2,9 @@
 #define miner_h
 
 #include <stdio.h>
+#include <unistd.h>
+
+#include "config.h"
 #include "params.h"
 
 #ifdef HAVE_OPENCL
@@ -24,10 +27,6 @@
 	#define SOCKETFAIL(a) ((a) < 0)
 	#define INVSOCK -1
 	#define CLOSESOCKET close
-
-	#define SOCKETINIT {}
-
-	#define SOCKERRMSG strerror(errno)
 #endif
 
 #ifdef WIN32

@@ -138,6 +138,18 @@ int get_devices_being_used()
 	return --i;
 }
 
+int is_device_used(unsigned int dev_id, unsigned int platform_id) {
+	int i;
+	int sequential_id = get_sequential_id(dev_id, platform_id);
+
+	for (i = 0; i < get_devices_being_used(); i++) {
+		if (sequential_id == ocl_device_list[i])
+			return 1;
+	}
+
+	return 0;
+}
+
 int get_platform_id(unsigned int sequential_id)
 {
 	int pos = 0, i = 0;

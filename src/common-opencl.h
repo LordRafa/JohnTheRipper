@@ -91,6 +91,7 @@ void init_opencl_devices();
 void clean_opencl_environment();
 int get_number_of_available_devices();
 int get_devices_being_used();
+int is_device_used(unsigned int dev_id, unsigned int platform_id);
 int get_platform_id(unsigned int sequential_id);
 int get_device_id(unsigned int sequential_id);
 int get_sequential_id(unsigned int dev_id, unsigned int platform_id);
