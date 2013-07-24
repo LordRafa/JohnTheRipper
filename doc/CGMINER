@@ -1,0 +1,37 @@
+John the Ripper CGMiner Integration
+
+John the Ripper can check if there are running a CGMiner instance and pause to mine in those GPUs that are going to be used in a cracking session. When John the Ripper ends, the paused GPUs will start again to mine.
+
+Furthermore you can set John the Ripper to start a new CGMiner Instance when the cracking session ends if there are not any other CGMiner instance.
+
+Usage
+
+Pause CGMiner GPUs
+
+    You need to be sure that you start the CGMiner instance with the options:
+
+    --api-listen --api-allow W:127.0.0.1/24 --api-port PORT
+
+    Set the CGMiner API port in john.conf file:
+
+    ...
+    [Options:Miner]
+    ...
+    APIPort=PORT # PORT must be equal to CGMiner API port.
+    ...
+
+Start a CGMiner Instance After JtR Ends
+
+    Set the option AfterEnd and AfterEndOptions in john.conf file.
+
+    ...
+    [Options:Miner]
+    ...
+    AfterEnd=1 # 1 - to enable Mine After End
+               # 0 - to disable Mine After End
+    AfterEndOptions= # CGMiner instance parameters.
+    ...
+
+The new CGMiner instance will be created with the parameters:
+
+--api-listen --api-allow W:127.0.0.1/24
