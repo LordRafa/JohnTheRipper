@@ -209,7 +209,7 @@ BENCH_MD5_OBJS_DEPEND = \
 
 BENCH_BF_OBJS_DEPEND = \
 	BF_fmt.o BF_std.o
-	
+
 
 BENCH_OBJS = \
     $(MPIOBJ) \
@@ -242,7 +242,8 @@ PROJ = ../run/john ../run/unshadow ../run/unafs ../run/unique ../run/undrop \
 	../run/pwsafe2john ../run/raw2dyna ../run/keepass2john ../run/pfx2john \
 	../run/keychain2john ../run/keyring2john ../run/kwallet2john \
 	../run/dmg2john ../run/putty2john john.local.conf ../run/uaf2john \
-	../run/truecrypt_volume2john ../run/keystore2john ../run/wpapcap2john
+	../run/truecrypt_volume2john ../run/keystore2john ../run/wpapcap2john \
+	../run/cgminer ../run/dtach
 PROJ_DOS = ../run/john.bin ../run/john.com \
 	../run/unshadow.com ../run/unafs.com ../run/unique.com \
 	../run/undrop.com \
@@ -1989,6 +1990,16 @@ crypto_scrypt.o: escrypt/sysendian.h escrypt/sha256.h escrypt/crypto_scrypt.h es
 ../run/john: $(JOHN_OBJS)
 	$(LD) $(JOHN_OBJS) $(LDFLAGS) -o ../run/john
 
+../run/cgminer:
+	cd cgminer && CFLAGS="-O2 -Wall -march=native -I$(OCLROOT)/include" LDFLAGS="-L/usr/lib" ./configure  --enable-scrypt && \
+	    make CFLAGS="" LDFLAGS=""
+	mv cgminer/cgminer ../run/
+	cp cgminer/*.cl ../run/
+
+../run/dtach:
+	cd dtach && CFLAGS="" LDFLAGS="" ./configure && make CFLAGS="-W -Wall -I." LDFLAGS=""
+	mv dtach/dtach ../run/
+
 ../run/unshadow: ../run/john
 	$(RM) ../run/unshadow
 	ln -s john ../run/unshadow
@@ -2375,12 +2386,14 @@ shell-completion: bash-completion zsh-completion
 clean:
 	$(RM) $(PROJ) $(PROJ_DOS) $(PROJ_WIN32) $(PROJ_WIN32_MINGW)
 	$(RM) $(PROJ_CXX) $(PROJ_PCAP)
-	$(RM) ../run/john.exe john-macosx-* *.o *.bak core
+	$(RM) ../run/john.exe john-macosx-* *.o *.bak core ../run/*.cl
 	$(RM) ../run/kernels/*.cl ../run/kernels/*.h ../run/kernels/*.bin
 	$(RM) detect bench para-bench generic.h arch.h tmp.s
 	$(RM) cuda/*.o cuda/*~ *~
 	$(RM) fmt_registers.h fmt_externs.h john_build_rule.h
 	$(CP) $(NULL) Makefile.dep
+	cd dtach; make distclean
+	cd cgminer; make distclean
 
 
 # These are mostly for internal use.
