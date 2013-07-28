@@ -35,8 +35,8 @@
 #define CGMinerAPIGPUDISABLE "gpudisable"
 #define CGMinerAPIGPUENABLE "gpuenable"
 
-#define AFTEREND "AfterEnd"
-#define AFTERENDPARAMS "AfterEndOptions"
+#define AFTEREND "StartAfterEnd"
+#define AFTERENDPARAMS "StartAfterEndOptions"
 
 #define DTACHMODEDETACHED "-n";
 #define DTACHSOCKETFILE "dtach_socket";
