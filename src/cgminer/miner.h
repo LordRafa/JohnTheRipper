@@ -431,6 +431,10 @@ struct cgpu_info {
 	int cgminer_id;
 	struct device_drv *drv;
 	int device_id;
+#ifdef HAVE_OPENCL
+	int cl_platform_id;
+	int cl_device_id;
+#endif
 	char *name;
 	char *device_path;
 	void *device_data;
@@ -1244,7 +1248,7 @@ struct work {
 	char		getwork_mode;
 };
 
-#ifdef USE_MODMINER 
+#ifdef USE_MODMINER
 struct modminer_fpga_state {
 	bool work_running;
 	struct work running_work;

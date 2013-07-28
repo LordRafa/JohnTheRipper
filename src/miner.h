@@ -28,6 +28,23 @@
 #define COMMAND_LENGTH 256
 #define SOCKET_BUFFER_LENGTH 4096
 
+#define LOCALHOST "127.0.0.1"
+#define CGMinerAPIPort "APIPort"
+#define CGMinerAPIGPUCOUNT "gpucount"
+#define CGMinerAPIDEVDETAILS "devdetails"
+#define CGMinerAPIGPUDISABLE "gpudisable"
+#define CGMinerAPIGPUENABLE "gpuenable"
+
+#define AFTEREND "AfterEnd"
+#define AFTERENDPARAMS "AfterEndOptions"
+
+#define DTACHMODEDETACHED "-n";
+#define DTACHSOCKETFILE "dtach_socket";
+
+#define CGMinerParamAPILISTEN "--api-listen"
+#define CGMinerParamAPIALLOW "--api-allow"
+#define CGMinerParamAPIALLOWIP "W:127.0.0.1/24"
+
 #if defined(unix)
 	#include <errno.h>
 	#include <sys/socket.h>

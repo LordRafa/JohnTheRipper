@@ -12,11 +12,11 @@
 
 #include "miner.h"
 
-static int numgpu;
+static int numgpu = 0;
 static int minergpus[MAX_OCL_DEV];
 static int cgminerinstance;
 
-static int get_data(char *buf, SOCKETTYPE sock)
+static void get_data(char *buf, SOCKETTYPE sock)
 {
 	int p, n;
 
@@ -26,7 +26,7 @@ static int get_data(char *buf, SOCKETTYPE sock)
 	{
 		n = recv(sock, &buf[p], SOCKET_BUFFER_LENGTH - p , 0);
 		if (SOCKETFAIL(n)) {
-			pexit("API Recv failed.\n");
+			pexit("Error: API Recv failed.\n");
 		}
 		if (n == 0)
 			break;
@@ -34,7 +34,6 @@ static int get_data(char *buf, SOCKETTYPE sock)
 		buf[p] = '\0';
 	}
 
-	return 1;
 }
 
 static SOCKETTYPE send_data(char *command, int api_port)
@@ -44,7 +43,9 @@ static SOCKETTYPE send_data(char *command, int api_port)
 	struct sockaddr_in serv;
 	SOCKETTYPE sock;
 
-	ip = gethostbyname("127.0.0.1");
+	if ((ip = gethostbyname(LOCALHOST)) == NULL) {
+		pexit("Error: Couldn't find the host name.\n");
+	}
 
 	memset(&serv, 0, sizeof(serv));
 	serv.sin_family = AF_INET;
@@ -54,14 +55,14 @@ static SOCKETTYPE send_data(char *command, int api_port)
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == INVSOCK)
 	{
-		pexit("Socket initialisation failed.\n");
+		pexit("Error: Socket initialisation failed.\n");
 	}
 
 	if (!SOCKETFAIL(connect(sock, (struct sockaddr *)&serv, sizeof(struct sockaddr))))
 	{
 #ifdef HAVE_OPENCL
 		if (SOCKETFAIL(send(sock, command, strlen(command), 0))) {
-			pexit("API Send failed.\n");
+			pexit("Error: API Send failed.\n");
 		}
 #endif
 	}
@@ -83,108 +84,127 @@ void miner_pause()
 	int i;
 	unsigned int dev_id;
 	unsigned int platform_id;
-	int api_port = cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, "APIPort");
+	int api_port = cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, CGMinerAPIPort);
 
 	cgminerinstance = 0;
 
-	sock = send_data("gpucount", api_port);
+	sock = send_data(CGMinerAPIGPUCOUNT, api_port);
 	if (sock != INVSOCK)
 	{
 		cgminerinstance = 1;
-		if (get_data(buf, sock))
-		{
-			nextobj = strchr(buf, '|');
-			nextobj++;
-			sscanf(nextobj, "GPUS,Count=%d|", &numgpu);
+		get_data(buf, sock);
+		if ((nextobj = strchr(buf, '|')) == NULL) {
+			pexit("Error: Parsing CGMiner API.\n");
 		}
+		nextobj++;
+		sscanf(nextobj, "GPUS,Count=%d|", &numgpu);
 	}
 	CLOSESOCKET(sock);
 
 #ifdef HAVE_OPENCL
 	for (i = 0; i < numgpu; i++)
 	{
-		sprintf(command,"devdetails|%d", i);
+		sprintf(command,"%s|%d", CGMinerAPIDEVDETAILS, i);
 		sock = send_data(command, api_port);
 		if (sock != INVSOCK)
 		{
-			if (get_data(buf, sock))
+			get_data(buf, sock);
+			CLOSESOCKET(sock);
+			if ((nextobj = strchr(buf, '|')) == NULL) {
+				pexit("Error: Parsing CGMiner API.\n");
+			}
+			if ((nextobj = strchr(buf, ',')) == NULL) {
+				pexit("Error: Parsing CGMiner API.\n");
+			}
+			if ((nextobj = strchr(buf, ',')) == NULL) {
+				pexit("Error: Parsing CGMiner API.\n");
+			}
+			if ((nextobj = strchr(buf, ',')) == NULL) {
+				pexit("Error: Parsing CGMiner API.\n");
+			}
+			nextobj++;
+			sscanf(nextobj, "CL Platform ID=%d,CL Device ID=%d",
+			    &platform_id, &dev_id);
+			minergpus[i] = is_device_used(dev_id, platform_id);
+			if (minergpus[i])
 			{
-				nextobj = strchr(buf, '|');
-				nextobj = strchr(buf, ',');
-				nextobj = strchr(buf, ',');
-				nextobj = strchr(buf, ',');
-				nextobj++;
-				sscanf(nextobj, "CL Platform ID=%d,CL Device ID=%d",
-				    &platform_id, &dev_id);
-				minergpus[i] = is_device_used(dev_id, platform_id);
-				if (minergpus[i])
+				sprintf(command,"%s|%d", CGMinerAPIGPUDISABLE, i);
+				sock = send_data(command, api_port);
+				if (sock == INVSOCK)
 				{
+					fprintf(stderr, "Warning: Could not disabling device %d from platform %d.\n",
+					    dev_id, platform_id);
+				} else {
 					CLOSESOCKET(sock);
-					sprintf(command,"gpudisable|%d", i);
-					sock = send_data(command, api_port);
-					if (sock == INVSOCK)
-					{
-						fprintf(stderr, "Warning: Disabling device %d from platform %d.\n",
-						    dev_id, platform_id);
-					}
 				}
 			}
 		}
-		CLOSESOCKET(sock);
 	}
 #endif
+}
+
+
+void CGMinerGPURestart()
+{
+#ifdef HAVE_OPENCL
+	int api_port = cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, CGMinerAPIPort);
+
+	int i;
+	int sock;
+	char command[COMMAND_LENGTH];
+
+	for (i = 0; i < numgpu; i++)
+	{
+		if (minergpus[i])
+		{
+			sprintf(command,"%s|%d", CGMinerAPIGPUENABLE, i);
+			sock = send_data(command, api_port);
+			if (sock == INVSOCK)
+			{
+				fprintf(stderr, "Warning: Renabling device %d from platform %d.\n",
+				get_device_id(minergpus[i]), get_platform_id(minergpus[i]));
+			}
+			CLOSESOCKET(sock);
+		}
+	}
+#endif
+}
+
+void StartAfterEnd()
+{
+	if (cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, AFTEREND)) {
+		char *Options = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, AFTERENDPARAMS);
+		int i;
+		char cgminer[PATH_BUFFER_SIZE];
+		char dtach[PATH_BUFFER_SIZE];
+		char *argv[MAX_PARAMS];
+
+		strnzcpy(cgminer, path_expand(CGMINER_NAME), PATH_BUFFER_SIZE);
+		strnzcpy(dtach, path_expand(DTACH_NAME), PATH_BUFFER_SIZE);
+
+		argv[0] = dtach;
+		argv[1] = DTACHMODEDETACHED;
+		argv[2] = DTACHSOCKETFILE
+		argv[3] = cgminer;
+		argv[4] = CGMinerParamAPILISTEN;
+		argv[5] = CGMinerParamAPIALLOW;
+		argv[6] = CGMinerParamAPIALLOWIP;
+		i = 7;
+		argv[i++] = strtok(Options, " ");
+		while( (argv[i++] = strtok(NULL, " ")) != NULL );
+		argv[i] = NULL;
+
+		if (execv(dtach, argv) == -1)
+			fprintf(stderr, "Warning: CGMiner could not be executed.\n");
+	}
 }
 
 void miner_start()
 {
 	if (cgminerinstance == 1)
 	{
-#ifdef HAVE_OPENCL
-		int api_port = cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, "APIPort");
-
-		int i;
-		int sock;
-		char command[COMMAND_LENGTH];
-
-		for (i = 0; i < numgpu; i++)
-		{
-			if (minergpus[i])
-			{
-				sprintf(command,"gpuenable|%d", i);
-				sock = send_data(command, api_port);
-				if (sock == INVSOCK)
-				{
-					fprintf(stderr, "Warning: Renabling device %d from platform %d.\n",
-					    get_device_id(minergpus[i]), get_platform_id(minergpus[i]));
-				}
-				CLOSESOCKET(sock);
-			}
-		}
-#endif
+		CGMinerGPURestart();
 	} else {
-		if (cfg_get_int(SECTION_OPTIONS, SUBSECTION_MINER, "AfterEnd")) {
-			char *Options = cfg_get_param(SECTION_OPTIONS, SUBSECTION_MINER, "AfterEndOptions");
-			int i;
-			char cgminer[PATH_BUFFER_SIZE];
-			char dtach[PATH_BUFFER_SIZE];
-			char *argv[MAX_PARAMS];
-
-			strnzcpy(cgminer, path_expand(CGMINER_NAME), PATH_BUFFER_SIZE);
-			strnzcpy(dtach, path_expand(DTACH_NAME), PATH_BUFFER_SIZE);
-
-			argv[0] = dtach;
-			argv[1] = "-n";
-			argv[2] = "dtach_socket";
-			argv[3] = cgminer;
-			argv[4] = "--api-listen";
-			argv[5] = "--api-allow";
-			argv[6] = "W:127.0.0.1/24";
-			i = 7;
-			argv[i++] = strtok(Options, " ");
-			while( (argv[i++] = strtok(NULL, " ")) != NULL );
-			argv[i] = NULL;
-
-			execv(dtach, argv);
-		}
+		StartAfterEnd();
 	}
 }
