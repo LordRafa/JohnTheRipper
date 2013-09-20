@@ -84,9 +84,9 @@ static int valid(char *ciphertext, struct fmt_main *self)
 		pw_length = sizeof(pw) - 1;
 	memcpy(pw, ciphertext, pw_length); /* reuse the string, why not? */
 	pw[pw_length] = 0;
-   
+
    new_ciphertext = escrypt(pw, ciphertext);
-   
+
 	if (new_ciphertext && strlen(new_ciphertext) == length &&
 	    !strncmp(new_ciphertext, ciphertext, 31)) {
 		sup_length[length] = 1;
@@ -231,7 +231,7 @@ static int crypt_all(int *pcount, struct db_salt *salt)
       char *hash = escrypt(saved_key[index], saved_salt);
       if (!hash) {
          if (!warned) {
-            fprintf(stderr,                    
+            fprintf(stderr,
                     "Warning: crypt() returned NULL\n");
             warned = 1;
          }
@@ -279,6 +279,7 @@ struct fmt_main fmt_scrypt_lordrafa = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_OMP,
 		tests
 	}, {

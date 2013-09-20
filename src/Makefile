@@ -168,7 +168,7 @@ JOHN_OBJS = \
 	unafs.o \
 	undrop.o \
 	unique.o putty2john.o \
-	sha256.o crypto_scrypt-common.o crypto_scrypt.o lordrafa_scrypt_fmt.o
+	lordrafa_scrypt_fmt.o
 
 OCL_OBJS = \
 	common-opencl.o common_opencl_pbkdf2.o opencl_mysqlsha1_fmt.o \
@@ -2038,8 +2038,8 @@ sha256.o: escrypt/sysendian.h escrypt/sha256.h escrypt/sha256.c
 crypto_scrypt-common.o: escrypt/crypto_scrypt.h escrypt/crypto_scrypt-common.c
 	$(CC) $(CFLAGS) $(OPT_NORMAL) escrypt/crypto_scrypt-common.c
 
-crypto_scrypt.o: escrypt/sysendian.h escrypt/sha256.h escrypt/crypto_scrypt.h escrypt/crypto_scrypt.c
-	$(CC) $(CFLAGS) $(OPT_NORMAL) escrypt/crypto_scrypt.c
+crypto_scrypt-best.o: escrypt/sysendian.h escrypt/sha256.h escrypt/crypto_scrypt.h escrypt/crypto_scrypt-best.c escrypt/crypto_scrypt-sse.c escrypt/crypto_scrypt-nosse.c
+	$(CC) $(CFLAGS) $(OPT_NORMAL) escrypt/crypto_scrypt-best.c
 
 ../run/john: $(JOHN_OBJS)
 	$(LD) $(JOHN_OBJS) $(LDFLAGS) -o ../run/john

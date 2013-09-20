@@ -142,7 +142,28 @@ int opencl_get_devices()
 	return --i;
 }
 
-int is_device_used(unsigned int dev_id, unsigned int platform_id) {
+int get_sequential_id(unsigned int dev_id, unsigned int platform_id)
+{
+	int pos = 0, i = 0;
+
+	while (platforms[i].platform && i < platform_id)
+		pos += platforms[i++].num_devices;
+
+	if (i == platform_id && dev_id >= platforms[i].num_devices)
+		return -1;
+
+	return (platforms[i].platform ? pos + dev_id : -1);
+}
+
+int get_devices_being_used()
+{
+	int i = 0;
+	while (ocl_device_list[i++] != -1);
+	return --i;
+}
+
+int is_device_used(unsigned int dev_id, unsigned int platform_id)
+{
 	int i;
 	int sequential_id = get_sequential_id(dev_id, platform_id);
 
@@ -154,7 +175,7 @@ int is_device_used(unsigned int dev_id, unsigned int platform_id) {
 	return 0;
 }
 
-int get_platform_id(unsigned int sequential_id)
+int get_platform_id(int sequential_id)
 {
 	int pos = 0, i = 0;
 
@@ -177,19 +198,6 @@ int get_device_id(int sequential_id)
 		i++;
 	}
 	return (platforms[i].platform ? pos : -1);
-}
-
-int get_sequential_id(unsigned int dev_id, unsigned int platform_id)
-{
-	int pos = 0, i = 0;
-
-	while (platforms[i].platform && i < platform_id)
-		pos += platforms[i++].num_devices;
-
-	if (i == platform_id && dev_id >= platforms[i].num_devices)
-		return -1;
-
-	return (platforms[i].platform ? pos + dev_id : -1);
 }
 
 static void start_opencl_environment()
