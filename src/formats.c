@@ -13,6 +13,11 @@
 #ifndef BENCH_BUILD
 #include "options.h"
 #else
+#if ARCH_INT_GT_32
+typedef unsigned short ARCH_WORD_32;
+#else
+typedef unsigned int ARCH_WORD_32;
+#endif
 #include "loader.h"
 #endif
 
@@ -167,6 +172,11 @@ static char *fmt_self_test_body(struct fmt_main *format,
 		return NULL;
 #endif
 
+#ifndef BENCH_BUILD
+	if (options.flags & FLG_NOTESTS)
+		return NULL;
+#endif
+
 	if (format->params.plaintext_length < 1 ||
 	    format->params.plaintext_length > PLAINTEXT_BUFFER_SIZE - 3)
 		return "plaintext_length";
@@ -196,6 +206,10 @@ static char *fmt_self_test_body(struct fmt_main *format,
 	if ((format->methods.split == fmt_default_split) &&
 	    (format->params.flags & FMT_SPLIT_UNIFIES_CASE))
 		return "FMT_SPLIT_UNIFIES_CASE";
+
+	if ((format->params.flags & FMT_OMP_BAD) &&
+	    !(format->params.flags & FMT_OMP))
+		return "FMT_OMP_BAD";
 
 	if ((format->methods.binary == fmt_default_binary) &&
 	    (format->params.binary_size > 0))
@@ -348,7 +362,7 @@ static char *fmt_self_test_body(struct fmt_main *format,
 /* change the next line to #if 0 to temp stop doing validity checks.
  * this should almost NEVER be done.  However, I have done it when
  * trying new code out in a format, and before it was totally working
- * just to check the speed of the changes, to determine it it was
+ * just to check the speed of the changes, to determine if it was
  * good  enough to continue to fully implement, or if the changes
  * were not making any difference.
  */
@@ -409,9 +423,9 @@ static char *fmt_self_test_body(struct fmt_main *format,
 		if (!(++current)->ciphertext) {
 /* Jump straight to last index for non-bitslice DES */
 			if (!(format->params.flags & FMT_BS) &&
-			    (!strcmp(format->params.label, "des") ||
-			    !strcmp(format->params.label, "bsdi") ||
-			    !strcmp(format->params.label, "afs")))
+			    (!strcmp(format->params.label, "descrypt") ||
+			    !strcmp(format->params.label, "bsdicrypt") ||
+			    !strcmp(format->params.label, "AFS")))
 				index = max - 1;
 
 			current = format->params.tests;

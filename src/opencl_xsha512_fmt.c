@@ -68,6 +68,8 @@ typedef struct {		// notice memory align problem
 } xsha512_ctx;
 
 
+#define OCL_CONFIG		"xsha512"
+
 typedef struct {
 	uint8_t v[SALT_SIZE];	// 32bits
 } xsha512_salt;
@@ -158,23 +160,21 @@ static char *get_key(int index)
 
 static void init(struct fmt_main *self)
 {
-	char *temp;
 	cl_ulong maxsize;
 
-	opencl_init_opt("$JOHN/kernels/xsha512_kernel.cl",
+	opencl_init("$JOHN/kernels/xsha512_kernel.cl",
 	                ocl_gpu_id, NULL);
 
 	crypt_kernel = clCreateKernel(program[ocl_gpu_id], KERNEL_NAME, &ret_code);
 	HANDLE_CLERROR(ret_code, "Error while creating crypt_kernel");
 
-	if ((temp = getenv("LWS")))
-		local_work_size = atoi(temp);
-	else
+	/* Read LWS/GWS prefs from config or environment */
+	opencl_get_user_preferences(OCL_CONFIG);
+
+	if (!local_work_size)
 		local_work_size = cpu(device_info[ocl_gpu_id]) ? 1 : 64;
 
-	if ((temp = getenv("GWS")))
-		global_work_size = atoi(temp);
-	else
+	if (!global_work_size)
 		global_work_size = MAX_KEYS_PER_CRYPT;
 
 	/* Note: we ask for the kernels' max sizes, not the device's! */
@@ -512,6 +512,7 @@ struct fmt_main fmt_opencl_xsha512 = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT,
 	    tests
 	}, {

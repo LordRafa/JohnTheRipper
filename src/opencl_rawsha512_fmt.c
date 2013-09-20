@@ -64,6 +64,8 @@ typedef struct { // notice memory align problem
 	uint32_t buflen;
 } sha512_ctx;
 
+#define OCL_CONFIG		"rawsha512"
+
 typedef struct {
     uint8_t length;
     char v[PLAINTEXT_LENGTH+1];
@@ -150,19 +152,18 @@ static char *get_key(int index)
 
 static void init(struct fmt_main *self)
 {
-	char *temp;
+	size_t maxlws;
 
-	if ((temp = getenv("LWS")))
-		local_work_size = atoi(temp);
-	else
+	/* Read LWS/GWS prefs from config or environment */
+	opencl_get_user_preferences(OCL_CONFIG);
+
+	if (!local_work_size)
 		local_work_size = cpu(device_info[ocl_gpu_id]) ? 1 : 64;
 
-	if ((temp = getenv("GWS")))
-		global_work_size = atoi(temp);
-	else
+	if (!global_work_size)
 		global_work_size = MAX_KEYS_PER_CRYPT;
 
-	opencl_init("$JOHN/kernels/sha512_kernel.cl", ocl_gpu_id);
+	opencl_init("$JOHN/kernels/sha512_kernel.cl", ocl_gpu_id, NULL);
 
 	gkey = mem_calloc(global_work_size * sizeof(sha512_key));
 	ghash = mem_calloc(global_work_size * sizeof(sha512_hash));
@@ -197,6 +198,13 @@ static void init(struct fmt_main *self)
 	clSetKernelArg(cmp_kernel, 0, sizeof(mem_binary), &mem_binary);
 	clSetKernelArg(cmp_kernel, 1, sizeof(mem_out), &mem_out);
 	clSetKernelArg(cmp_kernel, 2, sizeof(mem_cmp), &mem_cmp);
+
+	HANDLE_CLERROR(clGetKernelWorkGroupInfo(crypt_kernel, devices[ocl_gpu_id], CL_KERNEL_WORK_GROUP_SIZE, sizeof(maxlws), &maxlws, NULL), "Query max work group size");
+
+	if (local_work_size > maxlws) {
+		local_work_size = maxlws;
+		global_work_size = (global_work_size + local_work_size - 1) / local_work_size * local_work_size;
+	}
 
 	self->params.max_keys_per_crypt = global_work_size;
 	if (!local_work_size)
@@ -425,6 +433,7 @@ struct fmt_main fmt_opencl_rawsha512 = {
 		DEFAULT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT,
 		tests
 	}, {

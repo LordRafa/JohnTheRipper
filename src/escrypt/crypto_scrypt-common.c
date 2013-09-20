@@ -103,7 +103,7 @@ static const uint8_t * decode64_uint32(uint32_t * dst, uint32_t dstbits,
 }
 
 uint8_t *
-escrypt_r(escrypt_ctx_t * ctx,
+escrypt_r(escrypt_local_t * local,
     const uint8_t * passwd, size_t passwdlen,
     const uint8_t * setting,
     uint8_t * buf, size_t buflen)
@@ -112,26 +112,12 @@ escrypt_r(escrypt_ctx_t * ctx,
 	const uint8_t * src, * salt;
 	uint8_t * dst;
 	size_t prefixlen, saltlen, need;
-	uint8_t version;
 	uint64_t N;
 	uint32_t r, p;
-	int defeat_tmto;
 
-	if (setting[0] != '$' || setting[1] != '7')
+	if (setting[0] != '$' || setting[1] != '7' || setting[2] != '$')
 		return NULL;
-	src = setting + 2;
-	switch ((version = *src)) {
-	case '$':
-		break;
-	case 'a':
-		src++;
-		break;
-	default:
-		return NULL;
-	}
-	if (*src != '$')
-		return NULL;
-	src++;
+	src = setting + 3;
 
 	{
 		uint32_t N_log2;
@@ -149,8 +135,6 @@ escrypt_r(escrypt_ctx_t * ctx,
 	if (!src)
 		return NULL;
 
-	defeat_tmto = version >= 'a';
-
 	prefixlen = src - setting;
 
 	salt = src;
@@ -164,8 +148,8 @@ escrypt_r(escrypt_ctx_t * ctx,
 	if (need > buflen || need < saltlen)
 		return NULL;
 
-	if (escrypt_kdf(ctx, passwd, passwdlen, salt, saltlen, N, r, p,
-	    defeat_tmto, hash, sizeof(hash)))
+	if (escrypt_kdf(local, passwd, passwdlen, salt, saltlen,
+	    N, r, p, hash, sizeof(hash)))
 		return NULL;
 
 	dst = buf;
@@ -188,24 +172,25 @@ uint8_t *
 escrypt(const uint8_t * passwd, const uint8_t * setting)
 {
 	static uint8_t buf[4 + 1 + 5 + 5 + BYTES2CHARS(32) + 1 + HASH_LEN + 1];
-	escrypt_ctx_t ctx;
+	escrypt_local_t local;
 	uint8_t * retval;
-	if (escrypt_init(&ctx, 0, 0, NULL, 0))
+
+	if (escrypt_init_local(&local))
 		return NULL;
-	retval = escrypt_r(&ctx,
+	retval = escrypt_r(&local,
 	    passwd, strlen((char *)passwd), setting, buf, sizeof(buf));
-	if (escrypt_free(&ctx))
+	if (escrypt_free_local(&local))
 		return NULL;
 	return retval;
 }
 
 uint8_t *
-escrypt_gensalt_r(uint32_t N_log2, uint32_t r, uint32_t p, int defeat_tmto,
+escrypt_gensalt_r(uint32_t N_log2, uint32_t r, uint32_t p,
     const uint8_t * src, size_t srclen,
     uint8_t * buf, size_t buflen)
 {
 	uint8_t * dst;
-	size_t prefixlen = 3 + !!defeat_tmto + 1 + 5 + 5;
+	size_t prefixlen = 3 + 1 + 5 + 5;
 	size_t saltlen = BYTES2CHARS(srclen);
 	size_t need;
 
@@ -219,8 +204,6 @@ escrypt_gensalt_r(uint32_t N_log2, uint32_t r, uint32_t p, int defeat_tmto,
 	dst = buf;
 	*dst++ = '$';
 	*dst++ = '7';
-	if (defeat_tmto)
-		*dst++ = 'a';
 	*dst++ = '$';
 
 	*dst++ = itoa64[N_log2];
@@ -243,27 +226,27 @@ escrypt_gensalt_r(uint32_t N_log2, uint32_t r, uint32_t p, int defeat_tmto,
 }
 
 uint8_t *
-escrypt_gensalt(uint32_t N_log2, uint32_t r, uint32_t p, int defeat_tmto,
+escrypt_gensalt(uint32_t N_log2, uint32_t r, uint32_t p,
     const uint8_t * src, size_t srclen)
 {
 	static uint8_t buf[4 + 1 + 5 + 5 + BYTES2CHARS(32) + 1];
-	return escrypt_gensalt_r(N_log2, r, p, defeat_tmto, src, srclen,
+	return escrypt_gensalt_r(N_log2, r, p, src, srclen,
 	    buf, sizeof(buf));
 }
 
 int
-lordrafa_crypto_scrypt(const uint8_t * passwd, size_t passwdlen,
+crypto_scrypt(const uint8_t * passwd, size_t passwdlen,
     const uint8_t * salt, size_t saltlen, uint64_t N, uint32_t r, uint32_t p,
     uint8_t * buf, size_t buflen)
 {
-	escrypt_ctx_t ctx;
+	escrypt_local_t local;
 	int retval;
 
-	if (escrypt_init(&ctx, 0, 0, NULL, 0))
+	if (escrypt_init_local(&local))
 		return -1;
-	retval = escrypt_kdf(&ctx,
-	    passwd, passwdlen, salt, saltlen, N, r, p, 0, buf, buflen);
-	if (escrypt_free(&ctx))
+	retval = escrypt_kdf(&local,
+	    passwd, passwdlen, salt, saltlen, N, r, p, buf, buflen);
+	if (escrypt_free_local(&local))
 		return -1;
 	return retval;
 }

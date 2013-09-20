@@ -211,7 +211,7 @@ static char *include_source(char *pathname, int dev_id, char *options)
 	return include;
 }
 
-static void read_kernel_source(char *kernel_filename)
+static void opencl_read_source(char *kernel_filename)
 {
 	char *kernel_path = path_expand(kernel_filename);
 	FILE *fp = fopen(kernel_path, "r");
@@ -307,7 +307,7 @@ static void build_kernel_exp(int dev_id, char *options)
 
 static void init_dev()
 {
-	opencl_init_dev(ocl_gpu_id);
+	opencl_prepare_dev(ocl_gpu_id);
 
 	opencl_DES_bs_data_gpu = clCreateBuffer(context[ocl_gpu_id], CL_MEM_READ_WRITE, MULTIPLIER * sizeof(opencl_DES_bs_transfer), NULL, &err);
 	if(opencl_DES_bs_data_gpu == (cl_mem)0)
@@ -327,7 +327,7 @@ static void init_dev()
 
 	HANDLE_CLERROR(clEnqueueWriteBuffer(queue[ocl_gpu_id], index768_gpu, CL_TRUE, 0, 768 * sizeof(unsigned int), index768, 0, NULL, NULL ), "Failed Copy data to gpu");
 
-	read_kernel_source("$JOHN/kernels/DES_bs_kernel.cl") ;
+	opencl_read_source("$JOHN/kernels/DES_bs_kernel.cl") ;
 }
 
 void modify_src() {
@@ -372,7 +372,7 @@ void DES_bs_select_device(struct fmt_main *fmt)
 	size_t max_lws;
 	const char *errMsg;
 
-	opencl_init_opt("$JOHN/kernels/DES_bs_kernel.cl", ocl_gpu_id, NULL);
+	opencl_init("$JOHN/kernels/DES_bs_kernel.cl", ocl_gpu_id, NULL);
 
 	krnl[ocl_gpu_id][0] = clCreateKernel(program[ocl_gpu_id], "DES_bs_25_b", &err) ;
 	if (err) {

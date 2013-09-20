@@ -44,6 +44,7 @@ static char *ext_mode;
 
 static c_int ext_word[PLAINTEXT_BUFFER_SIZE];
 c_int ext_abort, ext_status, ext_cipher_limit, ext_minlen, ext_maxlen;
+c_int ext_time;
 
 static struct c_ident ext_ident_status = {
 	NULL,
@@ -75,8 +76,14 @@ static struct c_ident ext_ident_maxlen = {
 	&ext_maxlen
 };
 
-static struct c_ident ext_globals = {
+static struct c_ident ext_ident_time = {
 	&ext_ident_maxlen,
+	"session_start_time",
+	&ext_time
+};
+
+static struct c_ident ext_globals = {
+	&ext_ident_time,
 	"word",
 	ext_word
 };
@@ -146,6 +153,8 @@ void ext_init(char *mode, struct db_main *db)
 	} else
 		ext_cipher_limit = options.length;
 
+	ext_time = (int) time(NULL);
+
 	ext_maxlen = options.force_maxlength;
 	if (options.force_minlength > 0)
 		ext_minlen = options.force_minlength;
@@ -175,17 +184,23 @@ void ext_init(char *mode, struct db_main *db)
 	f_generate = c_lookup("generate");
 	f_filter = c_lookup("filter");
 
-	if ((ext_flags & EXT_REQ_RESTORE) && !c_lookup("restore")) {
-		if (john_main_process)
-			fprintf(stderr,
-			        "No restore() for external mode: %s\n", mode);
-		error();
-	}
 	if ((ext_flags & EXT_REQ_GENERATE) && !f_generate) {
 		if (john_main_process)
 			fprintf(stderr,
 			    "No generate() for external mode: %s\n", mode);
 		error();
+	}
+	if ((ext_flags & EXT_REQ_GENERATE) && !c_lookup("restore")) {
+		if (ext_flags & EXT_REQ_RESTORE) {
+			if (john_main_process)
+				fprintf(stderr,
+				        "No restore() for external mode: %s\n",
+				        mode);
+			error();
+		} else if (john_main_process)
+				fprintf(stderr,
+				        "Warning: external mode '%s' can't be"
+				        " resumed if aborted\n", mode);
 	}
 	if ((ext_flags & EXT_REQ_FILTER) && !f_filter) {
 		if (john_main_process)

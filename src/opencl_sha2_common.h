@@ -28,7 +28,11 @@
 /* Macros for reading/writing chars from int32's (from rar_kernel.cl) */
 #define GETCHAR(buf, index) ((buf)[(index)])
 #define ATTRIB(buf, index, val) (buf)[(index)] = val
+#if gpu_amd(DEVICE_INFO) || no_byte_addressable(DEVICE_INFO)
 #define PUTCHAR(buf, index, val) (buf)[(index)>>2] = ((buf)[(index)>>2] & ~(0xffU << (((index) & 3) << 3))) + ((val) << (((index) & 3) << 3))
+#else
+#define PUTCHAR(buf, index, val) ((uchar*)(buf))[(index)] = (val)
+#endif
 
 /* Macro for get a multiple of a given value */
 #define GET_MULTIPLE(dividend, divisor)         ((unsigned int) ((dividend / divisor) * divisor))
@@ -74,7 +78,7 @@ void common_find_best_gws(int sequential_id, unsigned int rounds, int step,
   group size for the given format
 -- */
 void common_find_best_lws(size_t group_size_limit,
-	unsigned int sequential_id, cl_kernel crypt_kernel);
+	int sequential_id, cl_kernel crypt_kernel);
 #endif
 
 #endif	/* OPENCL_SHA2_COMMON_H */

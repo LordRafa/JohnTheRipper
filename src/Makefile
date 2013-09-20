@@ -65,9 +65,12 @@ KRB5_LDFLAGS = `find 2>&1 /usr/include/ /usr/local/include/ -name "krb5.h" | gre
 #HAVE_KRB5 = -DHAVE_KRB5
 #KRB5_LDFLAGS = -lk5crypto -lkrb5
 
-# Change sm_10 to sm_20 if you have Fermi support (400 series or later) or
-# sm_30 if you have Kepler (600 series or later) and your nvcc supports it.
-NVCC_FLAGS = -c -Xptxas -v -arch sm_10
+# CUDA settings. Instead of "-arch sm_10" you could use sm_20 or sm_30 or
+# -gencode arch=compute_10,code=sm_10 -gencode arch=compute_20,code=sm_21
+# but that leads to problems on GTX Titan.
+# You could add "-gencode arch=compute_30,code=sm_30" too but that just
+# leads to regressions for Kepler cards, when it works at all.
+NVCC_FLAGS = -c -Xptxas -v -fmad=true -arch sm_10
 CUDAPATH = /usr/local/cuda
 
 ifdef NVIDIA_CUDA
@@ -110,6 +113,9 @@ JOHN_OBJS = \
 	BSDI_fmt.o \
 	MD5_fmt.o MD5_std.o \
 	BF_fmt.o BF_std.o \
+	scrypt_fmt.o \
+	escrypt/crypto_scrypt-best.o escrypt/crypto_scrypt-common.o \
+	escrypt/sha256.o \
 	AFS_fmt.o \
 	LM_fmt.o \
 	trip_fmt.o \
@@ -150,8 +156,9 @@ JOHN_OBJS = \
 	gost.o \
 	batch.o bench.o charset.o common.o compiler.o config.o cracker.o \
 	crc32.o external.o formats.o getopt.o idle.o inc.o john.o list.o \
-	loader.o logger.o math.o memory.o misc.o options.o params.o path.o \
-	recovery.o rpp.o rules.o signals.o single.o status.o tty.o wordlist.o \
+	loader.o logger.o mask.o math.o memory.o misc.o options.o params.o \
+	path.o recovery.o rpp.o rules.o signals.o single.o status.o tty.o \
+	wordlist.o \
 	mkv.o mkvlib.o \
 	listconf.o \
 	fake_salts.o \
@@ -178,7 +185,8 @@ OCL_OBJS = \
 	opencl_ntlmv2_fmt.o opencl_rawsha256_fmt.o \
 	opencl_krb5pa-sha1_fmt.o opencl_rar_fmt.o opencl_odf_aes_fmt.o \
 	opencl_sha2_common.o opencl_blockchain_fmt.o opencl_keyring_fmt.o \
-	opencl_7z_fmt.o
+	opencl_pbkdf2_hmac_sha256_fmt.o opencl_rakp_fmt.o
+# opencl_7z_fmt.o
 
 CUDA_OBJS = \
 	common-cuda.o cuda_common.o \
@@ -1437,13 +1445,54 @@ macosx-x86-64-gpu:
 		ASFLAGS="$(ASFLAGS) -m64 -DUNDERSCORES -DBSD -DALIGN_LOG" \
 		CFLAGS="$(CFLAGS) -m64 -I$(OCLROOT)/include -I$(CUDAPATH)/include -DBSD -DHAVE_CRYPT -DHAVE_OPENCL -DHAVE_CUDA -Wno-deprecated-declarations" \
 		LDFLAGS="$(LDFLAGS) -m64 -L$(CUDAPATH)/lib -lcudart -framework OpenCL" \
-		NVCC_FLAGS="$(NVCC_FLAGS) -m64"
+		NVCC_FLAGS="$(NVCC_FLAGS) -m64 -ccbin=/usr/bin/llvm-gcc"
 	$(MKDIR) ../run/kernels/
 	$(CP_PRESERVE) opencl/*.cl ../run/kernels/
 	$(CP_PRESERVE) opencl_*.h ../run/kernels/
 	@echo "Failing after this point just means some helper tools did not build:"
 	$(MAKE) $(PROJ_CXX)
 	$(MAKE) $(PROJ_PCAP)
+	@echo "All done"
+
+# This target needs a real gcc and a wrapper for using clang's assembler:
+# Copy osx_as_wrapper.sh to /usr/local/bin/as or some other directory at your
+# choice (but the file MUST be named 'as') and be sure this directory is
+# first in your $PATH.
+macosx-x86-64-native-gpu:
+	$(LN) x86-64.h arch.h
+	@echo "#define JOHN_BLD" '"'$@'"' > john_build_rule.h
+	$(MAKE) $(PROJ) \
+		JOHN_OBJS="$(JOHN_OBJS) $(OCL_OBJS) $(CUDA_OBJS) c3_fmt.o x86-64.o sse-intrinsics.o" \
+		ASFLAGS="$(ASFLAGS) -march=native -DUNDERSCORES -DBSD -DALIGN_LOG" \
+		CFLAGS="$(CFLAGS) -march=native -I$(OCLROOT)/include -I$(CUDAPATH)/include -DHAVE_CRYPT -DHAVE_OPENCL -DHAVE_CUDA -Wno-deprecated-declarations" \
+		LDFLAGS="$(LDFLAGS) -march=native -L$(CUDAPATH)/lib -lcudart -framework OpenCL" \
+		NVCC_FLAGS="$(NVCC_FLAGS) -m64 -ccbin=/usr/bin/llvm-gcc"
+	$(MKDIR) ../run/kernels/
+	$(CP_PRESERVE) opencl/*.cl ../run/kernels/
+	$(CP_PRESERVE) opencl_*.h ../run/kernels/
+	@echo "Failing after this point just means some helper tools did not build:"
+	$(MAKE) $(PROJ_CXX) CFLAGS="$(CFLAGS) -march=native"
+	$(MAKE) $(PROJ_PCAP) CFLAGS="$(CFLAGS) -march=native"
+	@echo "All done"
+
+# This target needs a real gcc and a wrapper for using clang's assembler:
+# Copy osx_as_wrapper.sh to /usr/local/bin/as or some other directory at your
+# choice (but the file MUST be named 'as') and be sure this directory is
+# first in your $PATH.
+macosx-x86-64-native-opencl:
+	$(LN) x86-64.h arch.h
+	@echo "#define JOHN_BLD" '"'$@'"' > john_build_rule.h
+	$(MAKE) $(PROJ) \
+		JOHN_OBJS="$(JOHN_OBJS) $(OCL_OBJS) c3_fmt.o x86-64.o sse-intrinsics.o" \
+		ASFLAGS="$(ASFLAGS) -march=native -DUNDERSCORES -DBSD -DALIGN_LOG" \
+		CFLAGS="$(CFLAGS) -march=native -I$(OCLROOT)/include -DHAVE_CRYPT -DHAVE_OPENCL -Wno-deprecated-declarations" \
+		LDFLAGS="$(LDFLAGS) -march=native -framework OpenCL"
+	$(MKDIR) ../run/kernels/
+	$(CP_PRESERVE) opencl/*.cl ../run/kernels/
+	$(CP_PRESERVE) opencl_*.h ../run/kernels/
+	@echo "Failing after this point just means some helper tools did not build:"
+	$(MAKE) $(PROJ_CXX) CFLAGS="$(CFLAGS) -march=native"
+	$(MAKE) $(PROJ_PCAP) CFLAGS="$(CFLAGS) -march=native"
 	@echo "All done"
 
 macosx-x86-64-opencl:
@@ -1470,7 +1519,7 @@ macosx-x86-64-cuda:
 		CFLAGS="$(CFLAGS) -I$(CUDAPATH)/include -DBSD -DHAVE_CRYPT -DHAVE_CUDA -m64 -Wno-deprecated-declarations" \
 		ASFLAGS="$(ASFLAGS) -m64 -DUNDERSCORES -DBSD -DALIGN_LOG" \
 		LDFLAGS="$(LDFLAGS) -m64 -L$(CUDAPATH)/lib -lcudart" \
-		NVCC_FLAGS="$(NVCC_FLAGS) -m64"
+		NVCC_FLAGS="$(NVCC_FLAGS) -m64 -ccbin=/usr/bin/llvm-gcc"
 	@echo "Failing after this point just means some helper tools did not build:"
 	$(MAKE) $(PROJ_CXX)
 	$(MAKE) $(PROJ_PCAP)
@@ -1803,12 +1852,17 @@ win32-mingw-x86-sse2:
 	@echo "#define JOHN_BLD" '"'$@'"' > john_build_rule.h
 	$(MAKE) $(PROJ_WIN32_MINGW) \
 		JOHN_OBJS="$(JOHN_OBJS) x86.o x86-sse.o sha1-mmx.o md4-mmx.o md5-mmx.o sse-intrinsics.o" \
-		CFLAGS="$(CFLAGS) -Wall -mpreferred-stack-boundary=4 -msse2 -m32" \
-		LDFLAGS="$(LDFLAGS) -lpthread" \
-		ASFLAGS="$(ASFLAGS) -msse2 -m32 -DUNDERSCORES"
+		CFLAGS="-c -static -Wall -Wdeclaration-after-statement -O2 -fomit-frame-pointer -I/usr/local/include $(OMPFLAGS) $(AMDAPP) $(JOHN_CFLAGS) -Wall -mpreferred-stack-boundary=4 -msse2 -m32" \
+		LDFLAGS="-static -lssl -lcrypto -lwsock32 -lwst -lws2_32 -lgdi32 -lm -lpthread.dll -lz.dll $(OMPFLAGS)" \
+		ASFLAGS="$(ASFLAGS) -msse2 -m32 -DUNDERSCORES" \
+		CPP=$(GCC) CC=$(GCC) LD=$(GCC) CXX=$(CXX)
 	@echo "Failing after this point just means some helper tools did not build:"
-	$(MAKE) $(PROJ_CXX) CFLAGS="$(CFLAGS) -m32"
-	$(MAKE) $(PROJ_PCAP) CFLAGS="$(CFLAGS) -m32"
+	$(MAKE) $(PROJ_CXX) \
+	    CFLAGS="-c -static -Wall -Wdeclaration-after-statement -O2 -fomit-frame-pointer -I/usr/local/include $(HAVE_GMP) $(OMPFLAGS) $(AMDAPP) $(JOHN_CFLAGS) -Wall -mpreferred-stack-boundary=4 -msse2 -m32" \
+	    CPP=$(GCC) CC=$(GCC) LD=$(GCC) CXX=$(CXX)
+	$(MAKE) $(PROJ_PCAP) \
+	    CFLAGS="-c -static -Wall -Wdeclaration-after-statement -O2 -fomit-frame-pointer -I/usr/local/include $(HAVE_GMP) $(OMPFLAGS) $(AMDAPP) $(JOHN_CFLAGS) -Wall -mpreferred-stack-boundary=4 -msse2 -m32" \
+	    CPP=$(GCC) CC=$(GCC) LD=$(GCC) CXX=$(CXX)
 	@echo "All done"
 
 win32-mingw-x86-mmx:
@@ -2326,7 +2380,7 @@ john.o: john.c fmt_externs.h fmt_registers.h
 	$(CC) $(CFLAGS_MAIN) $(OPT_NORMAL) -O0 $*.c
 
 .c.o:
-	$(CC) $(CFLAGS) $(OPT_NORMAL) $*.c
+	$(CC) $(CFLAGS) $(OPT_NORMAL) $< -o $@
 
 .S.o:
 	$(AS) $(ASFLAGS) $*.S
@@ -2386,7 +2440,7 @@ shell-completion: bash-completion zsh-completion
 clean:
 	$(RM) $(PROJ) $(PROJ_DOS) $(PROJ_WIN32) $(PROJ_WIN32_MINGW)
 	$(RM) $(PROJ_CXX) $(PROJ_PCAP)
-	$(RM) ../run/john.exe john-macosx-* *.o *.bak core ../run/*.cl
+	$(RM) ../run/john.exe john-macosx-* *.o *.bak core ../run/*.cl escrypt/*.o
 	$(RM) ../run/kernels/*.cl ../run/kernels/*.h ../run/kernels/*.bin
 	$(RM) detect bench para-bench generic.h arch.h tmp.s
 	$(RM) cuda/*.o cuda/*~ *~

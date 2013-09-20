@@ -155,16 +155,18 @@ static void init(struct fmt_main *self)
 	char *temp;
 	cl_ulong maxsize;
 
-	opencl_init_opt("$JOHN/kernels/phpass_kernel.cl", ocl_gpu_id, NULL);
+	opencl_init("$JOHN/kernels/phpass_kernel.cl", ocl_gpu_id, NULL);
 
 	if ((temp = getenv("LWS")))
 		local_work_size = atoi(temp);
-	else
+
+	if (!local_work_size)
 		local_work_size = cpu(device_info[ocl_gpu_id]) ? 1 : 64;
 
 	if ((temp = getenv("GWS")))
 		global_work_size = atoi(temp);
-	else
+
+	if (!global_work_size)
 		global_work_size = MAX_KEYS_PER_CRYPT / 8;
 
 	/// Allocate memory
@@ -429,6 +431,7 @@ struct fmt_main fmt_opencl_phpass = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT,
 		tests
 	}, {

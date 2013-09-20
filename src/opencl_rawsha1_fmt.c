@@ -72,6 +72,7 @@ static struct fmt_tests tests[] = {
 	{"a9993e364706816aba3e25717850c26c9cd0d89d", "abc"},
 	{FORMAT_TAG "095bec1163897ac86e393fa16d6ae2c2fce21602", "7850"},
 	{"dd3fbb0ba9e133c4fd84ed31ac2e5bc597d61774", "7858"},
+	{"207db421a91dc3eb1d976e1925fe97313a1ae0b3", "Skipping and& Dipping__1"},
 	{NULL}
 };
 
@@ -224,7 +225,7 @@ static void fmt_rawsha1_init(struct fmt_main *self) {
 
 	local_work_size = global_work_size = 0;
 
-	opencl_init("$JOHN/kernels/sha1_kernel.cl", ocl_gpu_id);
+	opencl_init("$JOHN/kernels/sha1_kernel.cl", ocl_gpu_id, NULL);
 
 	// create kernel to execute
 	crypt_kernel = clCreateKernel(program[ocl_gpu_id], "sha1_crypt_kernel", &ret_code);
@@ -260,6 +261,13 @@ static void fmt_rawsha1_init(struct fmt_main *self) {
 		create_clobj(global_work_size);
 	}
 
+	// Current key_idx can only hold 26 bits of offset so
+	// we can't reliably use a GWS higher than 4.7M or so.
+	if (global_work_size > (1 << 26) * 4 / PLAINTEXT_LENGTH) {
+		global_work_size = (1 << 26) * 4 / PLAINTEXT_LENGTH;
+		global_work_size = global_work_size / local_work_size *
+			local_work_size;
+	}
 	if (options.verbosity > 2)
 		fprintf(stderr, "Local worksize (LWS) %d, Global worksize (GWS) %d\n",(int)local_work_size, (int)global_work_size);
 
@@ -401,6 +409,7 @@ struct fmt_main fmt_opencl_rawSHA1 = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_SPLIT_UNIFIES_CASE,
 		tests
 	}, {

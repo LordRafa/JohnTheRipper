@@ -219,7 +219,8 @@ void sevenzip_kdf(UTF8 *password, unsigned char *master)
 	long long round;
 	UTF16 buffer[PLAINTEXT_LENGTH + 1];
 #if !ARCH_LITTLE_ENDIAN
-        unsigned char temp[8] = { 0,0,0,0,0,0,0,0 };
+	int i;
+	unsigned char temp[8] = { 0,0,0,0,0,0,0,0 };
 #endif
 	SHA256_CTX sha;
 
@@ -318,6 +319,7 @@ struct fmt_main fmt_sevenzip = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_OMP | FMT_NOT_EXACT | FMT_UNICODE | FMT_UTF8,
 		sevenzip_tests
 	}, {

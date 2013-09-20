@@ -36,6 +36,8 @@
 #define uint16_t		unsigned short
 #define uint32_t		unsigned int
 
+#define OCL_CONFIG		"odf_aes"
+
 typedef struct {
 	uint32_t length;
 	uint8_t v[32];	// hash of password
@@ -102,7 +104,6 @@ static void init(struct fmt_main *self)
 {
 	cl_int cl_error;
 	char build_opts[64];
-	char *temp;
 	cl_ulong maxsize;
 
 	snprintf(build_opts, sizeof(build_opts),
@@ -110,17 +111,16 @@ static void init(struct fmt_main *self)
 	         (int)sizeof(inbuffer->v),
 	         (int)sizeof(currentsalt.salt),
 	         (int)sizeof(outbuffer->v));
-	opencl_init_opt("$JOHN/kernels/pbkdf2_hmac_sha1_unsplit_kernel.cl",
+	opencl_init("$JOHN/kernels/pbkdf2_hmac_sha1_unsplit_kernel.cl",
 	                ocl_gpu_id, build_opts);
 
-	if ((temp = getenv("LWS")))
-		local_work_size = atoi(temp);
-	else
+	/* Read LWS/GWS prefs from config or environment */
+	opencl_get_user_preferences(OCL_CONFIG);
+
+	if (!local_work_size)
 		local_work_size = cpu(device_info[ocl_gpu_id]) ? 1 : 64;
 
-	if ((temp = getenv("GWS")))
-		global_work_size = atoi(temp);
-	else
+	if (!global_work_size)
 		global_work_size = MAX_KEYS_PER_CRYPT;
 
 	crypt_kernel = clCreateKernel(program[ocl_gpu_id], "derive_key", &cl_error);
@@ -446,6 +446,7 @@ struct fmt_main fmt_opencl_odf_aes = {
 		1,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_OMP,
 		tests
 	}, {

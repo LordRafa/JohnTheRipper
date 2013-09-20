@@ -18,15 +18,11 @@
 #include "config.h"
 #include "options.h"
 #include "opencl_cryptsha256.h"
+#include "cryptsha256_common.h"
 
 #define FORMAT_LABEL			"sha256crypt-opencl"
-#define FORMAT_NAME			"crypt(3) $5$"
 #define ALGORITHM_NAME			"SHA256 OpenCL"
-
-#define BENCHMARK_COMMENT		" (rounds=5000)"
-#define BENCHMARK_LENGTH		-1
-
-#define CONFIG_NAME			"sha256crypt"
+#define OCL_CONFIG			"sha256crypt"
 
 //Checks for source code to pick (parameters, sizes, kernels to execute, etc.)
 #define _USE_CPU_SOURCE			(cpu(source_in_use))
@@ -336,7 +332,7 @@ static void find_best_gws(struct fmt_main * self, int sequential_id) {
 /* ------- Initialization  ------- */
 static void build_kernel(char * task, int sequential_id) {
 
-	opencl_build_kernel_save(task, sequential_id, NULL, 1, 1);
+	opencl_build_kernel(task, sequential_id, NULL, 1);
 
 	// create kernel(s) to execute
 	main_kernel[sequential_id] = clCreateKernel(program[sequential_id], "kernel_crypt", &ret_code);
@@ -355,9 +351,12 @@ static void init(struct fmt_main * self) {
 	char * tmp_value;
 	char * task = NULL;
 
-	for (i = 0; i < get_devices_being_used(); i++) {
+	//Prepare OpenCL environment.
+	opencl_preinit();
+
+	for (i = 0; i < opencl_get_devices(); i++) {
 		task = "$JOHN/kernels/cryptsha256_kernel_DEFAULT.cl";
-		opencl_init_dev(ocl_device_list[i]);
+		opencl_prepare_dev(ocl_device_list[i]);
 		source_in_use = device_info[ocl_device_list[i]];
 
 		if ((tmp_value = getenv("_TYPE")))
@@ -372,9 +371,15 @@ static void init(struct fmt_main * self) {
 		build_kernel(task, ocl_device_list[i]);
 	}
 	source_in_use = device_info[ocl_gpu_id];
-	global_work_size = get_task_max_size();
-	local_work_size = get_default_workgroup();
-	opencl_get_user_preferences(CONFIG_NAME);
+
+	/* Read LWS/GWS prefs from config or environment */
+	opencl_get_user_preferences(OCL_CONFIG);
+
+	if (!global_work_size && !getenv("GWS"))
+		global_work_size = get_task_max_size();
+
+	if (!local_work_size && !getenv("LWS"))
+		local_work_size = get_default_workgroup();
 
 	//Initialize openCL tuning (library) for this format.
 	opencl_init_auto_setup(STEP, HASH_LOOPS, ((_SPLIT_KERNEL_IN_USE) ? 7 : 3),
@@ -426,63 +431,6 @@ static void done(void) {
 		HANDLE_CLERROR(clReleaseKernel(final_kernel[ocl_gpu_id]), "Release kernel");
 	}
 	HANDLE_CLERROR(clReleaseProgram(program[ocl_gpu_id]), "Release Program");
-}
-
-/* ------- Check if the ciphertext if a valid SHA-256 crypt ------- */
-static int valid(char * ciphertext, struct fmt_main * self) {
-	char *pos, *start;
-
-	if (strncmp(ciphertext, "$5$", 3))
-			return 0;
-
-	ciphertext += 3;
-
-	if (!strncmp(ciphertext, ROUNDS_PREFIX,
-			sizeof(ROUNDS_PREFIX) - 1)) {
-		const char *num = ciphertext + sizeof(ROUNDS_PREFIX) - 1;
-		char *endp;
-		if (!strtoul(num, &endp, 10))
-					return 0;
-		if (*endp == '$')
-			ciphertext = endp + 1;
-			}
-	for (pos = ciphertext; *pos && *pos != '$'; pos++);
-	if (!*pos || pos < ciphertext || pos > &ciphertext[SALT_LENGTH]) return 0;
-
-	start = ++pos;
-	while (atoi64[ARCH_INDEX(*pos)] != 0x7F) pos++;
-	if (*pos || pos - start != CIPHERTEXT_LENGTH) return 0;
-	return 1;
-}
-
-/* ------- To binary functions ------- */
-#define TO_BINARY(b1, b2, b3) \
-	value = (ARCH_WORD_32)atoi64[ARCH_INDEX(pos[0])] | \
-		((ARCH_WORD_32)atoi64[ARCH_INDEX(pos[1])] << 6) | \
-		((ARCH_WORD_32)atoi64[ARCH_INDEX(pos[2])] << 12) | \
-		((ARCH_WORD_32)atoi64[ARCH_INDEX(pos[3])] << 18); \
-	pos += 4; \
-	out[b1] = value >> 16; \
-	out[b2] = value >> 8; \
-	out[b3] = value;
-
-static void * get_binary(char * ciphertext) {
-	static ARCH_WORD_32 outbuf[BINARY_SIZE/4];
-	ARCH_WORD_32 value;
-	char *pos = strrchr(ciphertext, '$') + 1;
-	unsigned char *out = (unsigned char*)outbuf;
-	int i=0;
-
-	do {
-		TO_BINARY(i, (i+10)%30, (i+20)%30);
-		i = (i+21)%30;
-	} while (i != 0);
-	value = (ARCH_WORD_32)atoi64[ARCH_INDEX(pos[0])] |
-		((ARCH_WORD_32)atoi64[ARCH_INDEX(pos[1])] << 6) |
-		((ARCH_WORD_32)atoi64[ARCH_INDEX(pos[2])] << 12);
-	out[31] = value >> 8;
-	out[30] = value;
-	return (void *)out;
 }
 
 /* ------- Compare functins ------- */
@@ -598,40 +546,7 @@ static int crypt_all(int *pcount, struct db_salt *_salt)
 }
 
 /* ------- Binary Hash functions group ------- */
-#ifdef DEBUG
-static void print_binary(void * binary) {
-	uint32_t *bin = binary;
-	int i;
-
-	for (i = 0; i < 8; i++)
-		fprintf(stderr, "%016x ", bin[i]);
-	puts("(Ok)");
-}
-
-static void print_hash() {
-	int i;
-
-	fprintf(stderr, "\n");
-	for (i = 0; i < 8; i++)
-		fprintf(stderr, "%016x ", calculated_hash[0].v[i]);
-	puts("");
-}
-#endif
-
-static int binary_hash_0(void * binary) {
-#ifdef DEBUG
-	print_binary(binary);
-#endif
-	return *(ARCH_WORD_32 *) binary & 0xF;
-}
-
-//Get Hash functions group.
-static int get_hash_0(int index) {
-#ifdef DEBUG
-	print_hash(index);
-#endif
-	return calculated_hash[index].v[0] & 0xF;
-}
+static int get_hash_0(int index) { return calculated_hash[index].v[0] & 0xf; }
 static int get_hash_1(int index) { return calculated_hash[index].v[0] & 0xff; }
 static int get_hash_2(int index) { return calculated_hash[index].v[0] & 0xfff; }
 static int get_hash_3(int index) { return calculated_hash[index].v[0] & 0xffff; }
@@ -654,6 +569,7 @@ struct fmt_main fmt_opencl_cryptsha256 = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT,
 		tests
 	}, {
@@ -667,7 +583,7 @@ struct fmt_main fmt_opencl_cryptsha256 = {
 		get_salt,
 		fmt_default_source,
 		{
-			binary_hash_0,
+			fmt_default_binary_hash_0,
 			fmt_default_binary_hash_1,
 			fmt_default_binary_hash_2,
 			fmt_default_binary_hash_3,

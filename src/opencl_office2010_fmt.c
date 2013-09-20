@@ -10,7 +10,7 @@
  * modification, are permitted.
  */
 
-#include <openssl/sha.h>
+#include "sha.h"
 #include <openssl/aes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,8 +46,7 @@
 #define MIN_KEYS_PER_CRYPT	1
 #define MAX_KEYS_PER_CRYPT	1
 
-#define LWS_CONFIG		"office2010_LWS"
-#define GWS_CONFIG		"office2010_GWS"
+#define OCL_CONFIG		"office2010_GWS"
 
 #define MIN(a, b)		(((a) > (b)) ? (b) : (a))
 #define MAX(a, b)		(((a) > (b)) ? (a) : (b))
@@ -404,11 +403,8 @@ static void find_best_gws(int do_benchmark, struct fmt_main *self)
 
 static void init(struct fmt_main *self)
 {
-	char *temp;
 	cl_ulong maxsize, maxsize2;
 	char build_opts[64];
-
-	local_work_size = global_work_size = 0;
 
 	snprintf(build_opts, sizeof(build_opts),
 	         "-DHASH_LOOPS=%u -DUNICODE_LENGTH=%u %s",
@@ -416,7 +412,7 @@ static void init(struct fmt_main *self)
 	         UNICODE_LENGTH,
 	         (options.flags & FLG_VECTORIZE) ? "-DVECTORIZE" :
 	         (options.flags & FLG_SCALAR) ? "-DSCALAR" : "");
-	opencl_init_opt("$JOHN/kernels/office2010_kernel.cl", ocl_gpu_id,
+	opencl_init("$JOHN/kernels/office2010_kernel.cl", ocl_gpu_id,
 	                build_opts);
 
 	if ((options.flags & FLG_VECTORIZE) /*||
@@ -428,17 +424,8 @@ static void init(struct fmt_main *self)
 		self->params.algorithm_name = "OpenCL 4x";
 	}
 
-	if ((temp = cfg_get_param(SECTION_OPTIONS, SUBSECTION_OPENCL, LWS_CONFIG)))
-		local_work_size = atoi(temp);
-
-	if ((temp = cfg_get_param(SECTION_OPTIONS, SUBSECTION_OPENCL, GWS_CONFIG)))
-		global_work_size = atoi(temp);
-
-	if ((temp = getenv("LWS")))
-		local_work_size = atoi(temp);
-
-	if ((temp = getenv("GWS")))
-		global_work_size = atoi(temp);
+	/* Read LWS/GWS prefs from config or environment */
+	opencl_get_user_preferences(OCL_CONFIG);
 
 	// create kernels to execute
 	GenerateSHA1pwhash = clCreateKernel(program[ocl_gpu_id], "GenerateSHA1pwhash", &ret_code);
@@ -651,7 +638,7 @@ static char *get_key(int index)
 	UTF16 buf[PLAINTEXT_LENGTH + 1];
 
 	memcpy(buf, &saved_key[index * UNICODE_LENGTH], saved_len[index]);
-	memset((char*)buf + saved_len[index], 0, 1);
+	buf[saved_len[index] >> 1] = 0;
 	return (char*)utf16_to_enc(buf);
 }
 
@@ -669,6 +656,7 @@ struct fmt_main fmt_opencl_office2010 = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_UNICODE | FMT_UTF8 | FMT_OMP,
 		tests
 	}, {

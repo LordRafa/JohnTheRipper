@@ -37,19 +37,18 @@
 #define BENCHMARK_COMMENT       ""
 #define BENCHMARK_LENGTH        0
 #define PLAINTEXT_LENGTH        27 /* Bumped 3x for UTF-8 */
-#define SALT_MAX_LENGTH         27 /* Username + Domainname len in characters */
+#define SALT_MAX_LENGTH         59 /* Username + Domainname len in characters */
 #define DIGEST_SIZE             16 /* octets */
 #define BINARY_SIZE             4 /* octets */
 #define BINARY_ALIGN            4
 #define SERVER_CHALL_LENGTH     16 /* hex chars */
 #define CLIENT_CHALL_LENGTH_MAX (1024 - SERVER_CHALL_LENGTH - 128) /* hex */
-#define SALT_SIZE_MAX           512 /* octets */
+#define SALT_SIZE_MAX           584 /* octets of salt blob */
 #define SALT_ALIGN              4
 #define CIPHERTEXT_LENGTH       32 /* hex chars */
 #define TOTAL_LENGTH            (12 + 3 * SALT_MAX_LENGTH + 1 + SERVER_CHALL_LENGTH + 1 + CLIENT_CHALL_LENGTH_MAX + 1 + CIPHERTEXT_LENGTH + 1)
 
-#define LWS_CONFIG              "ntlmv2_LWS"
-#define GWS_CONFIG              "ntlmv2_GWS"
+#define OCL_CONFIG              "ntlmv2"
 
 #define MIN(a, b)               (((a) > (b)) ? (b) : (a))
 #define MAX(a, b)               (((a) > (b)) ? (a) : (b))
@@ -74,6 +73,8 @@ static struct fmt_tests tests[] = {
 	{"", "SomeLongPassword1BlahBlah", {"W2K3ADWIN7\\user1",     "", "",              "1122334455667788","027EF88334DAA460144BDB678D4F988D","010100000000000092809B1192AACA01E01B519CB0248776000000000200120057004F0052004B00470052004F00550050000000000000000000"} },
 	{"", "TestUser's Password",       {"W2K3ADWIN7\\TEST_USER", "", "",              "1122334455667788","A06EC5ED9F6DAFDCA90E316AF415BA71","010100000000000036D3A13292AACA01D2CD95757A0836F9000000000200120057004F0052004B00470052004F00550050000000000000000000"} },
 #endif
+/* Long salt (username.domain > 27 chars) */
+	{"", "Newpass8", {"Administrator", "", "WIN-HMH39596ABN", "1122334455667788", "80be64a4282577cf3b80503f4acb0e5a", "0101000000000000f077830c70a4ce0114ddd5c22457143000000000020000000000000000000000"} },
 	{NULL}
 };
 
@@ -165,9 +166,9 @@ static void done(void)
   We're essentially using three salts, but we're going to pack it into a single blob for now.
 
   Input:  $NETNTLMv2$USER_DOMAIN$_SERVER_CHALLENGE_$_NTLMv2_RESP_$_CLIENT_CHALLENGE_
-  Username + Domain <= 27 characters (54 octets of UTF-16)
+  Username + Domain <= 59 characters (118 octets of UTF-16) - 2 blocks of MD5
   Server Challenge: 8 bytes
-  Client Challenge: < ~450 bytes
+  Client Challenge: <= 440 bytes
   Output: (int)salt[16].(int)Challenge Size, Server Challenge . Client Challenge
 */
 static void *get_salt(char *ciphertext)
@@ -176,7 +177,9 @@ static void *get_salt(char *ciphertext)
 	int i, identity_length, challenge_size;
 	char *pos = NULL;
 
-	if (!binary_salt) binary_salt = mem_alloc_tiny(SALT_SIZE_MAX, MEM_ALIGN_WORD);
+	/* 2 * 64 + 8 + 8 + 440 == 584 */
+	if (!binary_salt)
+		binary_salt = mem_alloc_tiny(SALT_SIZE_MAX, MEM_ALIGN_WORD);
 
 	/* Clean slate */
 	memset(binary_salt, 0, SALT_SIZE_MAX);
@@ -185,11 +188,14 @@ static void *get_salt(char *ciphertext)
 	for (pos = ciphertext + 11; *pos != '$'; pos++);
 
 	/* Convert identity (username + domain) string to NT unicode */
-	identity_length = enc_to_utf16((UTF16*)binary_salt, 64, (unsigned char *)ciphertext + 11, pos - (ciphertext + 11)) * sizeof(UTF16);
+	identity_length = enc_to_utf16((UTF16*)binary_salt, SALT_MAX_LENGTH,
+	                               (unsigned char *)ciphertext + 11,
+	                               pos - (ciphertext + 11)) * sizeof(UTF16);
 	binary_salt[identity_length] = 0x80;
 
 	/* Set length of last MD5 block */
-	((int*)binary_salt)[14] = (64 + identity_length) << 3;
+	((int*)binary_salt)[((identity_length + 8) >> 6) * 16 + 14] =
+		(64 + identity_length) << 3;
 
 	/* Set server and client challenge size */
 
@@ -201,20 +207,20 @@ static void *get_salt(char *ciphertext)
 	challenge_size = (strlen(ciphertext) - CIPHERTEXT_LENGTH - 2) / 2;
 
 	/* Set challenge size in response, in blocks */
-	((int*)binary_salt)[16] = 1 + (challenge_size + 8) / 64;
+	((int*)binary_salt)[32] = 1 + (challenge_size + 8) / 64;
 
 	/* Set server challenge */
 	for (i = 0; i < SERVER_CHALL_LENGTH / 2; i++)
-		binary_salt[64 + 4 + i] = (atoi16[ARCH_INDEX(ciphertext[i*2])] << 4) + atoi16[ARCH_INDEX(ciphertext[i*2+1])];
+		binary_salt[128 + 4 + i] = (atoi16[ARCH_INDEX(ciphertext[i*2])] << 4) + atoi16[ARCH_INDEX(ciphertext[i*2+1])];
 
 	/* Set client challenge */
 	ciphertext += SERVER_CHALL_LENGTH + 1 + CIPHERTEXT_LENGTH + 1;
 	for (i = 0; i < strlen(ciphertext) / 2; ++i)
-		binary_salt[64 + 4 + SERVER_CHALL_LENGTH / 2 + i] = (atoi16[ARCH_INDEX(ciphertext[i*2])] << 4) + atoi16[ARCH_INDEX(ciphertext[i*2+1])];
-	binary_salt[64 + 4 + SERVER_CHALL_LENGTH / 2 + i] = 0x80;
+		binary_salt[128 + 4 + SERVER_CHALL_LENGTH / 2 + i] = (atoi16[ARCH_INDEX(ciphertext[i*2])] << 4) + atoi16[ARCH_INDEX(ciphertext[i*2+1])];
+	binary_salt[128 + 4 + SERVER_CHALL_LENGTH / 2 + i] = 0x80;
 
 	/* Set length of last MD5 block */
-	((int*)binary_salt)[16 + 1 + 16 * ((challenge_size + 8) / 64) + 14] = (64 + challenge_size) << 3;
+	((int*)binary_salt)[32 + 1 + 16 * ((challenge_size + 8) / 64) + 14] = (64 + challenge_size) << 3;
 
 	/* Return a concatenation of the identity value and the server and client challenges */
 	return (void*)binary_salt;
@@ -396,7 +402,6 @@ static void find_best_gws(int do_benchmark, struct fmt_main *self)
 
 static void init(struct fmt_main *self)
 {
-	char *temp;
 	cl_ulong maxsize, maxsize2, max_mem;
 	char build_opts[64];
 	char *encoding = options.encodingDef ? options.encodingDef : "ISO_8859_1";
@@ -404,23 +409,12 @@ static void init(struct fmt_main *self)
 	if (options.utf8)
 		max_len = self->params.plaintext_length = 3 * PLAINTEXT_LENGTH;
 
-	local_work_size = global_work_size = 0;
-
 	snprintf(build_opts, sizeof(build_opts),
 	        "-DENC_%s -DENCODING=%s", encoding, encoding);
-	opencl_init_opt("$JOHN/kernels/ntlmv2_kernel.cl", ocl_gpu_id, build_opts);
+	opencl_init("$JOHN/kernels/ntlmv2_kernel.cl", ocl_gpu_id, build_opts);
 
-	if ((temp = cfg_get_param(SECTION_OPTIONS, SUBSECTION_OPENCL, LWS_CONFIG)))
-		local_work_size = atoi(temp);
-
-	if ((temp = cfg_get_param(SECTION_OPTIONS, SUBSECTION_OPENCL, GWS_CONFIG)))
-		global_work_size = atoi(temp);
-
-	if ((temp = getenv("LWS")))
-		local_work_size = atoi(temp);
-
-	if ((temp = getenv("GWS")))
-		global_work_size = atoi(temp);
+	/* Read LWS/GWS prefs from config or environment */
+	opencl_get_user_preferences(OCL_CONFIG);
 
 	/* create kernels to execute */
 	ntlmv2_nthash = clCreateKernel(program[ocl_gpu_id], "ntlmv2_nthash", &ret_code);
@@ -463,6 +457,11 @@ static void init(struct fmt_main *self)
 	while (global_work_size > max_mem / ((max_len + 63) / 64 * 64))
 		global_work_size -= local_work_size;
 
+	// Current key_idx can only hold 26 bits of offset so
+	// we can't reliably use a GWS higher than 4.7M or so.
+	if (global_work_size > (1 << 26) * 4 / PLAINTEXT_LENGTH)
+		global_work_size = (1 << 26) * 4 / PLAINTEXT_LENGTH;
+
 	// Ensure GWS is multiple of LWS
 	global_work_size = global_work_size / local_work_size * local_work_size;
 
@@ -496,7 +495,7 @@ static int valid(char *ciphertext, struct fmt_main *self)
 	if ( !(*pos2 && (pos2 - pos <= 3*SALT_MAX_LENGTH)) )
 		return 0;
 
-	/* This is tricky: Max supported salt length is 27 characters
+	/* This is tricky: Max supported salt length is 59 characters
 	   of Unicode, which has no exact correlation to number of octets.
 	   The actual rejection is postponed to the bottom of this function. */
 	saltlen = enc_to_utf16(utf16temp, SALT_MAX_LENGTH + 1,
@@ -532,8 +531,11 @@ static int valid(char *ciphertext, struct fmt_main *self)
 
 		if (!ldr_in_pot)
 		if (!warned++)
-			fprintf(stderr, "%s: One or more hashes rejected due to salt length limitation.\nMax supported sum of Username + Domainname lengths is 27 characters.\nTry the CPU format for those.\n", FORMAT_LABEL);
-
+			fprintf(stderr, "%s: One or more hashes rejected due "
+			        "to salt length limitation.\nMax supported sum"
+			        " of Username + Domainname lengths is %d"
+			         " characters.\nTry the CPU format for "
+			        "those.\n", FORMAT_LABEL, SALT_MAX_LENGTH);
 		return 0;
 	}
 	return 1;
@@ -752,6 +754,7 @@ struct fmt_main fmt_opencl_NTLMv2 = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_SPLIT_UNIFIES_CASE | FMT_UNICODE | FMT_UTF8,
 		tests
 	}, {

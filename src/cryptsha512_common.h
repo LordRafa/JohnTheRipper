@@ -8,9 +8,22 @@
  * There's ABSOLUTELY NO WARRANTY, express or implied.
  */
 
-/* ------ Contains (at least) prepare(), valid() and split() ------ */
+#ifndef _COMMON_CRYPTSHA512_H
+#define _COMMON_CRYPTSHA512_H
 
+/* ------ Contains (at least) prepare(), valid() and split() ------ */
+/* Prefix for optional rounds specification.  */
 #define ROUNDS_PREFIX           "rounds="
+/* Default number of rounds if not explicitly specified.  */
+#define ROUNDS_DEFAULT          5000
+/* Minimum number of rounds.  */
+#define ROUNDS_MIN              1	/* Drepper has it as 1000 */
+/* Maximum number of rounds.  */
+#define ROUNDS_MAX              999999999
+
+#define FORMAT_NAME		"crypt(3) $6$"
+#define BENCHMARK_COMMENT	" (rounds=5000)"
+#define BENCHMARK_LENGTH	-1
 
 /* ------- Check if the ciphertext if a valid SHA-512 crypt ------- */
 static int valid(char * ciphertext, struct fmt_main * self) {
@@ -66,3 +79,4 @@ static void * get_binary(char * ciphertext) {
 	out[63] = value;
 	return (void *)out;
 }
+#endif

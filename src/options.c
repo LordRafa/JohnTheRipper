@@ -77,6 +77,8 @@ static struct opt_entry opt_list[] = {
 		OPT_FMT_STR_ALLOC, &options.loader.activewordlistrules},
 	{"incremental", FLG_INC_SET, FLG_CRACKING_CHK,
 		0, 0, OPT_FMT_STR_ALLOC, &options.charset},
+	{"mask", FLG_MASK_SET, FLG_CRACKING_CHK,
+		0, OPT_REQ_PARAM, OPT_FMT_STR_ALLOC, &options.mask},
 	{"markov", FLG_MKV_SET, FLG_CRACKING_CHK,
 		0, 0, OPT_FMT_STR_ALLOC, &options.mkv_param},
 	{"mkv-stats", FLG_MKV_SET, FLG_CRACKING_CHK,
@@ -178,6 +180,7 @@ static struct opt_entry opt_list[] = {
 	{"request-vectorize", FLG_VECTORIZE, FLG_VECTORIZE, 0, FLG_SCALAR},
 	{"request-scalar", FLG_SCALAR, FLG_SCALAR, 0, FLG_VECTORIZE},
 #endif
+	{"skip-self-tests", FLG_NOTESTS, FLG_NOTESTS},
 	{NULL}
 };
 
@@ -214,6 +217,7 @@ static struct opt_entry opt_list[] = {
 "                          For a full list of NAME use --list=encodings\n" \
 "--rules[=SECTION]         enable word mangling rules for wordlist modes\n" \
 "--incremental[=MODE]      \"incremental\" mode [using section MODE]\n" \
+"--mask=MASK               mask mode using MASK\n" \
 "--markov[=OPTIONS]        \"Markov\" mode (see doc/MARKOV)\n" \
 "--external=MODE           external mode or word filter\n" \
 "--stdout[=LENGTH]         just output candidate passwords [cut at LENGTH]\n" \
@@ -346,6 +350,7 @@ void opt_print_hidden_usage(void)
 	puts("--mkv-stats=FILE          \"Markov\" stats file (see doc/MARKOV)");
 	puts("--reject-printable        reject printable binaries");
 	puts("--verbosity=N             change verbosity (1-5, default 3)");
+	puts("--skip-self-tests         skip self tests");
 #ifdef HAVE_DL
 	puts("--plugin=NAME[,..]        load this (these) dynamic plugin(s)");
 #endif
@@ -623,9 +628,12 @@ void opt_init(char *name, int argc, char **argv, int show_usage)
 		exit(0);
 	}
 
+	/*
+	 * This line is not a bug - it extends the next conditional.
+	 * It's from commit 90a8caee.
+	 */
 	if (!(options.subformat && !strcasecmp(options.subformat, "list")) &&
 	    (!options.listconf))
-
 	if ((options.flags & (FLG_PASSWD | FLG_PWD_REQ)) == FLG_PWD_REQ) {
 		if (john_main_process)
 			fprintf(stderr, "Password files required, "

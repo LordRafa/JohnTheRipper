@@ -50,7 +50,7 @@ static unsigned int key_idx = 0;
 #define MIN_KEYS_PER_CRYPT      1024
 #define MAX_KEYS_PER_CRYPT      (1024 * 2048)
 
-#define CONFIG_NAME             "rawmd4"
+#define OCL_CONFIG              "rawmd4"
 #define STEP                    65536
 
 static int have_full_hashes;
@@ -60,7 +60,7 @@ static const char * warn[] = {
 };
 
 extern void common_find_best_lws(size_t group_size_limit,
-        unsigned int sequential_id, cl_kernel crypt_kernel);
+        int sequential_id, cl_kernel crypt_kernel);
 extern void common_find_best_gws(int sequential_id, unsigned int rounds, int step,
         unsigned long long int max_run_time);
 
@@ -174,12 +174,12 @@ static void init(struct fmt_main *self)
 {
 	size_t selected_gws, max_mem;
 
-	opencl_init("$JOHN/kernels/md4_kernel.cl", ocl_gpu_id);
+	opencl_init("$JOHN/kernels/md4_kernel.cl", ocl_gpu_id, NULL);
 	crypt_kernel = clCreateKernel(program[ocl_gpu_id], "md4", &ret_code);
 	HANDLE_CLERROR(ret_code, "Error creating kernel. Double-check kernel name?");
 
-	local_work_size = global_work_size = 0;
-	opencl_get_user_preferences(CONFIG_NAME);
+	/* Read LWS/GWS prefs from config or environment */
+	opencl_get_user_preferences(OCL_CONFIG);
 
 	// Initialize openCL tuning (library) for this format.
 	opencl_init_auto_setup(STEP, 0, 3, NULL, warn,
@@ -210,6 +210,13 @@ static void init(struct fmt_main *self)
 		create_clobj(global_work_size, self);
 	else {
 		find_best_gws(self, ocl_gpu_id);
+	}
+	// Current key_idx can only hold 26 bits of offset so
+	// we can't reliably use a GWS higher than 4.7M or so.
+	if (global_work_size > (1 << 26) * 4 / PLAINTEXT_LENGTH) {
+		global_work_size = (1 << 26) * 4 / PLAINTEXT_LENGTH;
+		global_work_size = global_work_size / local_work_size *
+			local_work_size;
 	}
 	if (options.verbosity > 2)
 		fprintf(stderr,
@@ -391,6 +398,7 @@ struct fmt_main fmt_opencl_rawMD4 = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT,
 		tests
 	}, {

@@ -1,5 +1,6 @@
 /*-
  * Copyright 2009 Colin Percival
+ * Copyright 2013 Alexander Peslyak
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,111 +28,54 @@
  * online backup system.
  */
 
-#include "scrypt_platform.h"
 #include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "sha2.h"
-#undef MMX_COEF
-#undef MMX_COEF_SHA256
-#include "common.h"
-#include "misc.h"
-#include "pbkdf2_hmac_sha256.h"
+
+#include "sha256.h"
 #include "sysendian.h"
-#include "johnswap.h"
+
 #include "crypto_scrypt.h"
 
-#define blkcpy(a,b,c) memcpy(a,b,c)
-
-static void inline blkxor(uint8_t *, uint8_t *, size_t);
-static void inline salsa20_8(uint8_t[64]);
-static void inline blockmix_salsa8(uint8_t *, uint8_t *, size_t);
-static uint64_t inline integerify(uint8_t *, size_t);
-static void smix(uint8_t *, size_t, uint64_t, uint8_t *, uint8_t *);
-
-#ifdef _MSC_VER
-#define R(a,b) _rotl(a,b)
-#else
-#define R(a,b) (((a) << (b)) | ((a) >> (32 - (b))))
-#endif
-
-
-#if ARCH_ALLOWS_UNALIGNED
-
-#if ARCH_LITTLE_ENDIAN
-#define LE32dec(a)   *((uint32_t*)(a))
-#define LE32enc(a,b) *((uint32_t*)(a))=(b)
-#define LE64dec(a)   *((uint64_t*)(a))
-#else
-#define LE32dec(a)   JOHNSWAP(*((uint32_t*)(a)))
-#define LE32enc(a,b) *((uint32_t*)(a))=JOHNSWAP(b)
-#define LE64dec(a)   JOHNSWAP(*((uint64_t*)(a)))
-#endif
-
-#if ARCH_BITS==64
-static void inline
-blkxor(uint8_t * dest, uint8_t * src, size_t len)
+static void
+blkcpy(uint8_t * dest, const uint8_t * src, size_t len)
 {
-	size_t i, len2 = (len>>3);
+	size_t i;
 
-	for (i = 0; i < len2; ++i)
-		((ARCH_WORD_64*)dest)[i] ^= ((ARCH_WORD_64*)src)[i];
-	for (i <<= 3 ; i < len; i++)
-		dest[i] ^= src[i];
+	for (i = 0; i < len; i++)
+		dest[i] = src[i];
 }
-#else
-static void inline
-blkxor(uint8_t * dest, uint8_t * src, size_t len)
-{
-	size_t i, len2 = (len>>2);
 
-	for (i = 0; i < len2; ++i)
-		((ARCH_WORD_32*)dest)[i] ^= ((ARCH_WORD_32*)src)[i];
-	for (i <<= 2 ; i < len; i++)
-		dest[i] ^= src[i];
-}
-#endif
-#else
-
-#define LE32dec(a)   le32dec(a)
-#define LE32enc(a,b) le32enc(a,b)
-#define LE64dec(a)   le64dec(a)
-
-static void inline
-blkxor(uint8_t * dest, uint8_t * src, size_t len)
+static void
+blkxor(uint8_t * dest, const uint8_t * src, size_t len)
 {
 	size_t i;
 
 	for (i = 0; i < len; i++)
 		dest[i] ^= src[i];
 }
-#endif
+
 /**
  * salsa20_8(B):
  * Apply the salsa20/8 core to the provided block.
  */
-static void inline
+static void
 salsa20_8(uint8_t B[64])
 {
+	uint32_t B32[16];
 	uint32_t x[16];
 	size_t i;
 
-#ifdef ARCH_LITTLE_ENDIAN
-	memcpy(x,B,64);
-#else
-	uint32_t B32[16];
-
 	/* Convert little-endian values in. */
 	for (i = 0; i < 16; i++)
-		B32[i] = LE32dec(&B[i * 4]);
+		B32[i] = le32dec(&B[i * 4]);
 
 	/* Compute x = doubleround^4(B32). */
 	for (i = 0; i < 16; i++)
 		x[i] = B32[i];
-#endif
-
 	for (i = 0; i < 8; i += 2) {
+#define R(a,b) (((a) << (b)) | ((a) >> (32 - (b))))
 		/* Operate on columns. */
 		x[ 4] ^= R(x[ 0]+x[12], 7);  x[ 8] ^= R(x[ 4]+x[ 0], 9);
 		x[12] ^= R(x[ 8]+x[ 4],13);  x[ 0] ^= R(x[12]+x[ 8],18);
@@ -157,23 +101,16 @@ salsa20_8(uint8_t B[64])
 
 		x[12] ^= R(x[15]+x[14], 7);  x[13] ^= R(x[12]+x[15], 9);
 		x[14] ^= R(x[13]+x[12],13);  x[15] ^= R(x[14]+x[13],18);
+#undef R
 	}
 
-#ifdef ARCH_LITTLE_ENDIAN
-	{
-		uint32_t *p = (uint32_t*)B;
-		for (i = 0; i < 16; ++i)
-			p[i] += x[i];
-	}
-#else
 	/* Compute B32 = B32 + x. */
 	for (i = 0; i < 16; i++)
 		B32[i] += x[i];
 
 	/* Convert little-endian values out. */
 	for (i = 0; i < 16; i++)
-		LE32enc(&B[4 * i], B32[i]);
-#endif
+		le32enc(&B[4 * i], B32[i]);
 }
 
 /**
@@ -181,7 +118,7 @@ salsa20_8(uint8_t B[64])
  * Compute B = BlockMix_{salsa20/8, r}(B).  The input B must be 128r bytes in
  * length; the temporary space Y must also be the same size.
  */
-static void inline
+static void
 blockmix_salsa8(uint8_t * B, uint8_t * Y, size_t r)
 {
 	uint8_t X[64];
@@ -211,10 +148,12 @@ blockmix_salsa8(uint8_t * B, uint8_t * Y, size_t r)
  * integerify(B, r):
  * Return the result of parsing B_{2r-1} as a little-endian integer.
  */
-static uint64_t inline
-integerify(uint8_t * B, size_t r)
+static uint64_t
+integerify(const uint8_t * B, size_t r)
 {
-	return (LE64dec(&B[(2 * r - 1) * 64]));
+	const uint8_t * X = &B[(2 * r - 1) * 64];
+
+	return le64dec(X);
 }
 
 /**
@@ -258,7 +197,8 @@ smix(uint8_t * B, size_t r, uint64_t N, uint8_t * V, uint8_t * XY)
 }
 
 /**
- * crypto_scrypt(passwd, passwdlen, salt, saltlen, N, r, p, buf, buflen):
+ * escrypt_kdf(local, passwd, passwdlen, salt, saltlen,
+ *     N, r, p, buf, buflen):
  * Compute scrypt(passwd[0 .. passwdlen - 1], salt[0 .. saltlen - 1], N, r,
  * p, buflen) and write the result into buf.  The parameters r, p, and buflen
  * must satisfy r * p < 2^30 and buflen <= (2^32 - 1) * 32.  The parameter N
@@ -267,13 +207,13 @@ smix(uint8_t * B, size_t r, uint64_t N, uint8_t * V, uint8_t * XY)
  * Return 0 on success; or -1 on error.
  */
 int
-crypto_scrypt(const uint8_t * passwd, size_t passwdlen,
+escrypt_kdf(escrypt_local_t * local,
+    const uint8_t * passwd, size_t passwdlen,
     const uint8_t * salt, size_t saltlen, uint64_t N, uint32_t r, uint32_t p,
     uint8_t * buf, size_t buflen)
 {
-	uint8_t * B;
-	uint8_t * V;
-	uint8_t * XY;
+	size_t B_size, V_size;
+	uint8_t * B, * V, * XY;
 	uint32_t i;
 
 	/* Sanity-check parameters. */
@@ -301,32 +241,38 @@ crypto_scrypt(const uint8_t * passwd, size_t passwdlen,
 	}
 
 	/* Allocate memory. */
-	if ((B = malloc(128 * r * p)) == NULL)
+	B_size = (size_t)128 * r * p;
+	if ((B = malloc(B_size)) == NULL)
 		goto err0;
-	if ((XY = malloc(256 * r)) == NULL)
+	if ((XY = malloc((size_t)256 * r)) == NULL)
 		goto err1;
-	if ((V = malloc(128 * r * N)) == NULL)
+	V_size = (size_t)128 * r * N;
+	if ((V = malloc(V_size)) == NULL)
 		goto err2;
 
 	/* 1: (B_0 ... B_{p-1}) <-- PBKDF2(P, S, 1, p * MFLen) */
-	pbkdf2_sha256(passwd, passwdlen, (unsigned char*)salt, saltlen, 1, B, p * 128 * r, 0);
+	PBKDF2_SHA256(passwd, passwdlen, salt, saltlen, 1, B, B_size);
 
 	/* 2: for i = 0 to p - 1 do */
 	for (i = 0; i < p; i++) {
 		/* 3: B_i <-- MF(B_i, N) */
-		smix(&B[i * 128 * r], r, N, V, XY);
+		smix(&B[(size_t)128 * i * r], r, N, V, XY);
 	}
 
 	/* 5: DK <-- PBKDF2(P, B, 1, dkLen) */
-	pbkdf2_sha256(passwd, passwdlen, B, p * 128 * r, 1, buf, buflen, 0);
+	PBKDF2_SHA256(passwd, passwdlen, B, B_size, 1, buf, buflen);
 
 	/* Free memory. */
-	free(V);
+	if (local->size) {
+		local->base = local->aligned = V;
+		local->size = V_size;
+	} else
+		free(V);
 	free(XY);
 	free(B);
 
 	/* Success! */
-	return (0);
+	return 0;
 
 err2:
 	free(XY);
@@ -334,5 +280,20 @@ err1:
 	free(B);
 err0:
 	/* Failure! */
-	return (-1);
+	return -1;
+}
+
+int
+escrypt_init_local(escrypt_local_t * local)
+{
+/* Indicate to escrypt_kdf() that we don't use the local structure */
+	local->size = 0;
+	return 0;
+}
+
+int
+escrypt_free_local(escrypt_local_t * local)
+{
+/* The reference implementation frees its memory in escrypt_kdf() */
+	return 0;
 }

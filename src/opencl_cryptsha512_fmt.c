@@ -18,16 +18,11 @@
 #include "config.h"
 #include "options.h"
 #include "opencl_cryptsha512.h"
-#include "cryptsha512_valid.h"
+#include "cryptsha512_common.h"
 
 #define FORMAT_LABEL			"sha512crypt-opencl"
-#define FORMAT_NAME			"crypt(3) $6$"
 #define ALGORITHM_NAME			"SHA512 OpenCL"
-
-#define BENCHMARK_COMMENT		" (rounds=5000)"
-#define BENCHMARK_LENGTH		-1
-
-#define CONFIG_NAME			"sha512crypt"
+#define OCL_CONFIG			"sha512crypt"
 
 //Checks for source code to pick (parameters, sizes, kernels to execute, etc.)
 #define _USE_CPU_SOURCE			(cpu(source_in_use))
@@ -333,7 +328,7 @@ static void find_best_gws(struct fmt_main * self, int sequential_id) {
 /* ------- Initialization  ------- */
 static void build_kernel(char * task) {
 
-	opencl_build_kernel_save(task, ocl_gpu_id, NULL, 1, 1);
+	opencl_build_kernel(task, ocl_gpu_id, NULL, 1);
 
 	// create kernel(s) to execute
 	crypt_kernel = clCreateKernel(program[ocl_gpu_id], "kernel_crypt", &ret_code);
@@ -351,7 +346,7 @@ static void init(struct fmt_main * self) {
 	char * tmp_value;
 	char * task = "$JOHN/kernels/cryptsha512_kernel_DEFAULT.cl";
 
-	opencl_init_dev(ocl_gpu_id);
+	opencl_prepare_dev(ocl_gpu_id);
 	source_in_use = device_info[ocl_gpu_id];
 
 	if ((tmp_value = getenv("_TYPE")))
@@ -362,9 +357,14 @@ static void init(struct fmt_main * self) {
 
 	build_kernel(task);
 
-	global_work_size = get_task_max_size();
-	local_work_size = get_default_workgroup();
-	opencl_get_user_preferences(CONFIG_NAME);
+	/* Read LWS/GWS prefs from config or environment */
+	opencl_get_user_preferences(OCL_CONFIG);
+
+	if (!global_work_size && !getenv("GWS"))
+		global_work_size = get_task_max_size();
+
+	if (!local_work_size && !getenv("LWS"))
+		local_work_size = get_default_workgroup();
 
 	//Initialize openCL tuning (library) for this format.
 	opencl_init_auto_setup(STEP, HASH_LOOPS, ((_SPLIT_KERNEL_IN_USE) ? 7 : 3),
@@ -530,40 +530,7 @@ static int crypt_all(int *pcount, struct db_salt *_salt)
 }
 
 /* ------- Binary Hash functions group ------- */
-#ifdef DEBUG
-static void print_binary(void * binary) {
-	uint64_t *bin = binary;
-	int i;
-
-	for (i = 0; i < 8; i++)
-		fprintf(stderr, "%016lx ", bin[i]);
-	puts("(Ok)");
-}
-
-static void print_hash() {
-	int i;
-
-	fprintf(stderr, "\n");
-	for (i = 0; i < 8; i++)
-		fprintf(stderr, "%016lx ", calculated_hash[0].v[i]);
-	puts("");
-}
-#endif
-
-static int binary_hash_0(void * binary) {
-#ifdef DEBUG
-	print_binary(binary);
-#endif
-	return *(ARCH_WORD_32 *) binary & 0xF;
-}
-
-//Get Hash functions group.
-static int get_hash_0(int index) {
-#ifdef DEBUG
-	print_hash(index);
-#endif
-	return calculated_hash[index].v[0] & 0xF;
-}
+static int get_hash_0(int index) { return calculated_hash[index].v[0] & 0xf; }
 static int get_hash_1(int index) { return calculated_hash[index].v[0] & 0xff; }
 static int get_hash_2(int index) { return calculated_hash[index].v[0] & 0xfff; }
 static int get_hash_3(int index) { return calculated_hash[index].v[0] & 0xffff; }
@@ -586,6 +553,7 @@ struct fmt_main fmt_opencl_cryptsha512 = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT,
 		tests
 	}, {
@@ -599,7 +567,7 @@ struct fmt_main fmt_opencl_cryptsha512 = {
 		get_salt,
 		fmt_default_source,
 		{
-			binary_hash_0,
+			fmt_default_binary_hash_0,
 			fmt_default_binary_hash_1,
 			fmt_default_binary_hash_2,
 			fmt_default_binary_hash_3,

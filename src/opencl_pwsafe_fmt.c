@@ -40,7 +40,7 @@
 #define MIN_KEYS_PER_CRYPT      (512*112)
 #define MAX_KEYS_PER_CRYPT      MIN_KEYS_PER_CRYPT
 
-#define CONFIG_NAME		"pwsafe"
+#define OCL_CONFIG		"pwsafe"
 #define STEP                    256
 #define ROUNDS_DEFAULT          2048
 
@@ -50,7 +50,7 @@
 };
 
 extern void common_find_best_lws(size_t group_size_limit,
-	unsigned int sequential_id, cl_kernel crypt_kernel);
+	int sequential_id, cl_kernel crypt_kernel);
 extern void common_find_best_gws(int sequential_id, unsigned int rounds, int step,
 	unsigned long long int max_run_time);
 
@@ -219,7 +219,7 @@ static void init(struct fmt_main *self)
 	cl_ulong maxsize;
 	size_t selected_gws;
 
-	opencl_init_opt("$JOHN/kernels/pwsafe_kernel.cl", ocl_gpu_id, NULL);
+	opencl_init("$JOHN/kernels/pwsafe_kernel.cl", ocl_gpu_id, NULL);
 
 	init_kernel = clCreateKernel(program[ocl_gpu_id], KERNEL_INIT_NAME, &ret_code);
 	HANDLE_CLERROR(ret_code, "Error while creating init kernel");
@@ -230,9 +230,11 @@ static void init(struct fmt_main *self)
 	finish_kernel = clCreateKernel(program[ocl_gpu_id], KERNEL_FINISH_NAME, &ret_code);
 	HANDLE_CLERROR(ret_code, "Error while creating finish kernel");
 
-	local_work_size = cpu(device_info[ocl_gpu_id]) ? 1 : 64;
-	global_work_size = 0;
-	opencl_get_user_preferences(CONFIG_NAME);
+	/* Read LWS/GWS prefs from config or environment */
+	opencl_get_user_preferences(OCL_CONFIG);
+
+	if (!local_work_size && !getenv("LWS"))
+		local_work_size = cpu(device_info[ocl_gpu_id]) ? 1 : 64;
 
 	//Initialize openCL tuning (library) for this format.
 	opencl_init_auto_setup(STEP, ROUNDS_DEFAULT/8, 8, split_events,
@@ -472,6 +474,7 @@ struct fmt_main fmt_opencl_pwsafe = {
 		DEFAULT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT,
 		pwsafe_tests
 	}, {

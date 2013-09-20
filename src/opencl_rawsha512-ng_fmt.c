@@ -38,7 +38,7 @@
 #define RAW_BENCHMARK_LENGTH		-1
 #define X_BENCHMARK_LENGTH		0
 
-#define CONFIG_NAME			"rawsha512"
+#define OCL_CONFIG			"rawsha512"
 
 static sha512_salt			* salt;
 static uint32_t				* plaintext, * saved_idx;	// plaintext ciphertexts
@@ -379,8 +379,8 @@ static void init(struct fmt_main * self) {
 	char * task = "$JOHN/kernels/sha512-ng_kernel.cl";
 	size_t gws_limit;
 
-	opencl_init_dev(ocl_gpu_id);
-	opencl_build_kernel_save(task, ocl_gpu_id, NULL, 1, 1);
+	opencl_prepare_dev(ocl_gpu_id);
+	opencl_build_kernel(task, ocl_gpu_id, NULL, 1);
 
 	// create kernel(s) to execute
 	if (salted_format)
@@ -391,9 +391,14 @@ static void init(struct fmt_main * self) {
 	cmp_kernel = clCreateKernel(program[ocl_gpu_id], "kernel_cmp", &ret_code);
 	HANDLE_CLERROR(ret_code, "Error creating kernel_cmp. Double-check kernel name?");
 
-	global_work_size = get_task_max_size();
-	local_work_size = get_default_workgroup();
-	opencl_get_user_preferences(CONFIG_NAME);
+	/* Read LWS/GWS prefs from config or environment */
+	opencl_get_user_preferences(OCL_CONFIG);
+
+	if (!global_work_size && !getenv("GWS"))
+		global_work_size = get_task_max_size();
+
+	if (!local_work_size && !getenv("LWS"))
+		local_work_size = get_default_workgroup();
 
 	gws_limit = MIN((0xf << 22) * 4 / BUFFER_SIZE,
 			get_max_mem_alloc_size(ocl_gpu_id) / BUFFER_SIZE);
@@ -751,6 +756,7 @@ struct fmt_main fmt_opencl_rawsha512_ng = {
 		SALT_ALIGN_RAW,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_SPLIT_UNIFIES_CASE,
 		raw_tests
 	}, {
@@ -807,6 +813,7 @@ struct fmt_main fmt_opencl_xsha512_ng = {
 		SALT_ALIGN_X,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_SPLIT_UNIFIES_CASE,
 		x_tests
 	}, {

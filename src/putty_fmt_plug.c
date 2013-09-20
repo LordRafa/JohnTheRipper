@@ -16,7 +16,7 @@
 #include "formats.h"
 #include "misc.h"
 #include <openssl/aes.h>
-#include <openssl/sha.h>
+#include "sha.h"
 #include <openssl/evp.h>
 //#include <openssl/hmac.h>
 #include "gladman_hmac.h"
@@ -277,7 +277,7 @@ static int LAME_ssh2_load_userkey(char *passphrase)
 		char realmac[41];
 		unsigned char binary[20];
 		unsigned char *macdata;
-		unsigned char macdata_ar[4*5+sizeof(cur_salt->alg)+sizeof(cur_salt->encryption)+sizeof(cur_salt->comment)+sizeof(cur_salt->public_blob_len)+sizeof(cur_salt->private_blob_len)+1];
+		unsigned char macdata_ar[4*5+sizeof(cur_salt->alg)+sizeof(cur_salt->encryption)+sizeof(cur_salt->comment)+sizeof(cur_salt->public_blob)+sizeof(cur_salt->private_blob)+1];
 		int maclen;
 		int i;
 		if (cur_salt->old_fmt) {
@@ -312,7 +312,7 @@ static int LAME_ssh2_load_userkey(char *passphrase)
 			SHA1_Init(&s);
 			SHA1_Update(&s, header, sizeof(header)-1);
 			if (cur_salt->cipher && passphrase)
-				SHA_Update(&s, passphrase, passlen);
+				SHA1_Update(&s, passphrase, passlen);
 			SHA1_Final(mackey, &s);
 			hmac_sha1(mackey, 20, macdata, maclen, binary, length);
 			/* HMAC_Init(&ctx, mackey, 20, EVP_sha1());
@@ -384,6 +384,7 @@ struct fmt_main fmt_putty = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_OMP,
 		putty_tests
 	},

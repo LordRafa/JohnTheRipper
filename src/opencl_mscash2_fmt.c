@@ -88,8 +88,10 @@ static void set_key(char*, int) ;
 static int crypt_all(int *pcount, struct db_salt *salt) ;
 
 static void init(struct fmt_main *self) {
-	char 	*conf = NULL ;
 	int 	i ;
+
+	//Prepare OpenCL environment.
+	opencl_preinit();
 
 	///Allocate memory
 	key_host = mem_calloc(self -> params.max_keys_per_crypt * sizeof(*key_host)) ;
@@ -100,18 +102,10 @@ static void init(struct fmt_main *self) {
 	memset(dcc_hash_host, 0, 4 * sizeof(cl_uint) * MAX_KEYS_PER_CRYPT) ;
 	memset(dcc2_hash_host, 0, 4 * sizeof(cl_uint) * MAX_KEYS_PER_CRYPT) ;
 
-	local_work_size = global_work_size = 0 ;
+	/* Read LWS/GWS prefs from config or environment */
+	opencl_get_user_preferences(OCL_CONFIG);
 
-	if ((conf = cfg_get_param(SECTION_OPTIONS, SUBSECTION_OPENCL, LWS_CONFIG)))
-		local_work_size = atoi(conf) ;
-	if ((conf = getenv("LWS")))
-		local_work_size = atoi(conf) ;
-	if ((conf = cfg_get_param(SECTION_OPTIONS, SUBSECTION_OPENCL, GWS_CONFIG)))
-		global_work_size = atoi(conf) ;
-	if ((conf = getenv("GWS")))
-		global_work_size = atoi(conf) ;
-
-	for( i=0; i < get_devices_being_used(); i++)
+	for( i=0; i < opencl_get_devices(); i++)
 		select_device(ocl_device_list[i], self) ;
 
 	warning() ;
@@ -396,6 +390,7 @@ struct fmt_main fmt_opencl_mscash2 = {
 		SALT_ALIGN,
 		MAX_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_SPLIT_UNIFIES_CASE | FMT_UNICODE,
 		tests
 	},{

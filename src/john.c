@@ -68,6 +68,7 @@ static int john_omp_threads_new;
 #include "single.h"
 #include "wordlist.h"
 #include "inc.h"
+#include "mask.h"
 #include "mkv.h"
 #include "external.h"
 #include "batch.h"
@@ -109,6 +110,7 @@ extern int CPU_detect(void);
 #endif
 
 extern struct fmt_main fmt_DES, fmt_BSDI, fmt_MD5, fmt_BF;
+extern struct fmt_main fmt_scrypt;
 extern struct fmt_main fmt_AFS, fmt_LM;
 #ifdef HAVE_CRYPT
 extern struct fmt_main fmt_crypt;
@@ -164,7 +166,6 @@ extern struct fmt_main fmt_opencl_NT;
 extern struct fmt_main fmt_opencl_NTLMv2;
 extern struct fmt_main fmt_opencl_agilekeychain;
 extern struct fmt_main fmt_opencl_bf;
-extern struct fmt_main fmt_opencl_cisco4;
 extern struct fmt_main fmt_opencl_cryptMD5;
 extern struct fmt_main fmt_opencl_cryptsha256;
 extern struct fmt_main fmt_opencl_cryptsha512;
@@ -197,7 +198,9 @@ extern struct fmt_main fmt_opencl_xsha512_ng;
 extern struct fmt_main fmt_opencl_zip;
 extern struct fmt_main fmt_opencl_blockchain;
 extern struct fmt_main fmt_opencl_keyring;
-extern struct fmt_main fmt_opencl_sevenzip;
+//extern struct fmt_main fmt_opencl_sevenzip;
+extern struct fmt_main fmt_opencl_pbkdf2_hmac_sha256;
+extern struct fmt_main fmt_opencl_rakp;
 #endif
 #ifdef HAVE_CUDA
 extern struct fmt_main fmt_cuda_cryptmd5;
@@ -313,6 +316,7 @@ static void john_register_all(void)
 	john_register_one(&fmt_BSDI);
 	john_register_one(&fmt_MD5);
 	john_register_one(&fmt_BF);
+	john_register_one(&fmt_scrypt);
 	john_register_one(&fmt_LM);
 	john_register_one(&fmt_AFS);
 	john_register_one(&fmt_trip);
@@ -369,50 +373,47 @@ static void john_register_all(void)
 	john_register_one(&fmt_zip);
 
 #ifdef HAVE_OPENCL
-	if (any_opencl_device_exists()) {
-		john_register_one(&fmt_opencl_NSLDAPS);
-		john_register_one(&fmt_opencl_NT);
-		john_register_one(&fmt_opencl_NTLMv2);
-		john_register_one(&fmt_opencl_agilekeychain);
-		john_register_one(&fmt_opencl_cisco4);
-		john_register_one(&fmt_opencl_cryptMD5);
-		john_register_one(&fmt_opencl_cryptsha256);
-		john_register_one(&fmt_opencl_cryptsha512);
-		john_register_one(&fmt_opencl_dmg);
-		john_register_one(&fmt_opencl_encfs);
-		john_register_one(&fmt_opencl_gpg);
-		john_register_one(&fmt_opencl_keychain);
-		john_register_one(&fmt_opencl_krb5pa_sha1);
-		john_register_one(&fmt_opencl_mscash2);
-		john_register_one(&fmt_opencl_mysqlsha1);
-		john_register_one(&fmt_opencl_odf);
-		john_register_one(&fmt_opencl_odf_aes);
-		john_register_one(&fmt_opencl_office2007);
-		john_register_one(&fmt_opencl_office2010);
-		john_register_one(&fmt_opencl_office2013);
-		john_register_one(&fmt_opencl_phpass);
-		john_register_one(&fmt_opencl_pwsafe);
-		john_register_one(&fmt_opencl_rar);
-		john_register_one(&fmt_opencl_rawMD4);
-		john_register_one(&fmt_opencl_rawMD5);
-		john_register_one(&fmt_opencl_rawSHA1);
-		john_register_one(&fmt_opencl_rawsha256);
-		john_register_one(&fmt_opencl_rawsha512);
-		john_register_one(&fmt_opencl_rawsha512_ng);
-		john_register_one(&fmt_opencl_strip);
-		john_register_one(&fmt_opencl_sxc);
-		john_register_one(&fmt_opencl_wpapsk);
-		john_register_one(&fmt_opencl_xsha512);
-		john_register_one(&fmt_opencl_xsha512_ng);
-		john_register_one(&fmt_opencl_zip);
-		john_register_one(&fmt_opencl_blockchain);
-		john_register_one(&fmt_opencl_keyring);
-		john_register_one(&fmt_opencl_sevenzip);
-		/* The following two need to be last until they are fixed
-		   for new --device handling */
-		john_register_one(&fmt_opencl_bf);
-		john_register_one(&fmt_opencl_DES);
-	}
+	john_register_one(&fmt_opencl_DES);
+	john_register_one(&fmt_opencl_NSLDAPS);
+	john_register_one(&fmt_opencl_NT);
+	john_register_one(&fmt_opencl_NTLMv2);
+	john_register_one(&fmt_opencl_agilekeychain);
+	john_register_one(&fmt_opencl_bf);
+	john_register_one(&fmt_opencl_blockchain);
+	john_register_one(&fmt_opencl_cryptMD5);
+	john_register_one(&fmt_opencl_cryptsha256);
+	john_register_one(&fmt_opencl_cryptsha512);
+	john_register_one(&fmt_opencl_dmg);
+	john_register_one(&fmt_opencl_encfs);
+	john_register_one(&fmt_opencl_gpg);
+	john_register_one(&fmt_opencl_keychain);
+	john_register_one(&fmt_opencl_keyring);
+	john_register_one(&fmt_opencl_krb5pa_sha1);
+	john_register_one(&fmt_opencl_mscash2);
+	john_register_one(&fmt_opencl_mysqlsha1);
+	john_register_one(&fmt_opencl_odf);
+	john_register_one(&fmt_opencl_odf_aes);
+	john_register_one(&fmt_opencl_office2007);
+	john_register_one(&fmt_opencl_office2010);
+	john_register_one(&fmt_opencl_office2013);
+	john_register_one(&fmt_opencl_phpass);
+	john_register_one(&fmt_opencl_pwsafe);
+	john_register_one(&fmt_opencl_rar);
+	john_register_one(&fmt_opencl_rawMD4);
+	john_register_one(&fmt_opencl_rawMD5);
+	john_register_one(&fmt_opencl_rawSHA1);
+	john_register_one(&fmt_opencl_rawsha256);
+	john_register_one(&fmt_opencl_rawsha512);
+	john_register_one(&fmt_opencl_rawsha512_ng);
+//	john_register_one(&fmt_opencl_sevenzip);
+	john_register_one(&fmt_opencl_strip);
+	john_register_one(&fmt_opencl_sxc);
+	john_register_one(&fmt_opencl_wpapsk);
+	john_register_one(&fmt_opencl_xsha512);
+	john_register_one(&fmt_opencl_xsha512_ng);
+	john_register_one(&fmt_opencl_zip);
+	john_register_one(&fmt_opencl_pbkdf2_hmac_sha256);
+	john_register_one(&fmt_opencl_rakp);
 #endif
 
 #ifdef HAVE_CUDA
@@ -458,6 +459,9 @@ static void john_log_format(void)
 		log_event("- MPI: Node %u/%u running on %s", mpi_id + 1, mpi_p, mpi_name);
 #endif
 	/* make sure the format is properly initialized */
+#ifdef HAVE_OPENCL
+	if (!(options.gpu_devices->count && options.fork))
+#endif
 	fmt_init(database.format);
 
 	log_event("- Hash type: %.100s%s%.100s (lengths up to %d%s)",
@@ -525,7 +529,8 @@ static void john_omp_show_info(void)
 	if (mpi_p == 1)
 #endif
 	if (!options.fork && john_omp_threads_orig > 1 &&
-	    database.format && !rec_restoring_now) {
+	    database.format && database.format != &dummy_format &&
+	    !rec_restoring_now) {
 		const char *msg = NULL;
 		if (!(database.format->params.flags & FMT_OMP))
 			msg = "no OpenMP support";
@@ -580,11 +585,11 @@ static void john_omp_show_info(void)
 				fprintf(stderr, "MPI in use, disabling OMP "
 				        "(see doc/README.mpi)\n");
 			omp_set_num_threads(1);
-		} else
-			if(cfg_get_bool(SECTION_OPTIONS, SUBSECTION_MPI,
-			                "MPIOMPverbose", 1) && mpi_id == 0)
-				fprintf(stderr, "Note: Running both MPI and OMP"
-				        " (see doc/README.mpi)\n");
+		} else if(john_omp_threads_orig > 1 &&
+		        cfg_get_bool(SECTION_OPTIONS, SUBSECTION_MPI,
+		                "MPIOMPverbose", 1) && mpi_id == 0)
+			fprintf(stderr, "Note: Running both MPI and OMP"
+			        " (see doc/README.mpi)\n");
 	} else
 #endif
 	if (options.fork) {
@@ -649,6 +654,23 @@ static void john_fork(void)
 		case 0:
 			options.node_min += i;
 			options.node_max = options.node_min;
+#ifdef HAVE_OPENCL
+			// Poor man's multi-device support
+			if (options.gpu_devices->count) {
+				// Pick device to use for this child
+				opencl_preinit();
+				ocl_gpu_id =
+				    ocl_device_list[i % opencl_get_devices()];
+				platform_id = get_platform_id(ocl_gpu_id);
+
+				// Hide any other devices from list
+				ocl_device_list[0] = ocl_gpu_id;
+				ocl_device_list[1] = -1;
+
+				// Postponed format init in forked process
+				fmt_init(database.format);
+			}
+#endif
 			if (rec_restoring_now) {
 				unsigned int node_id = options.node_min;
 				rec_done(-2);
@@ -667,6 +689,21 @@ static void john_fork(void)
 		}
 	}
 
+#ifdef HAVE_OPENCL
+	// Poor man's multi-device support
+	if (options.gpu_devices->count) {
+		// Pick device to use for mother process
+		opencl_preinit();
+		ocl_gpu_id = ocl_device_list[0];
+		platform_id = get_platform_id(ocl_gpu_id);
+
+		// Hide any other devices from list
+		ocl_device_list[1] = -1;
+
+		// Postponed format init in mother process
+		fmt_init(database.format);
+	}
+#endif
 	john_main_process = 1;
 	john_child_pids = pids;
 	john_child_count = options.fork - 1;
@@ -746,6 +783,7 @@ static void john_mpi_wait(void)
 		fprintf(stderr, "%d: All hashes cracked! Abort remaining"
 		        " nodes manually!\n", mpi_id + 1);
 
+/* Some versions of MPI will eat 100% CPU while just waiting for exit */
 	if (nice(20) < 0)
 		fprintf(stderr, "%d: nice() failed\n", mpi_id + 1);
 
@@ -753,7 +791,7 @@ static void john_mpi_wait(void)
 		mpi_teardown();
 
 /* Close and possibly remove our .rec file now */
-	rec_done((children_ok && !event_abort) ? -1 : -2);
+	rec_done(!event_abort ? -1 : -2);
 }
 #endif
 
@@ -878,6 +916,9 @@ static void john_load(void)
 				log_event("Starting a new session");
 			log_event("Loaded a total of %s", john_loaded_counts());
 			/* make sure the format is properly initialized */
+#ifdef HAVE_OPENCL
+			if (!(options.gpu_devices->count && options.fork))
+#endif
 			fmt_init(database.format);
 			if (john_main_process)
 			printf("Loaded %s (%s%s%s [%s])\n",
@@ -1076,8 +1117,7 @@ static void john_init(char *name, int argc, char **argv)
 		listconf_parse_late();
 
 #ifdef HAVE_OPENCL
-	if (any_opencl_device_exists())
-		init_opencl_devices();
+	ocl_gpu_id = -1;
 #endif
 	miner_pause();
 
@@ -1121,8 +1161,8 @@ static void john_run(void)
 		/* WPA-PSK and WoW both have min-length 8. Until the format
 		   struct can hold this information, we need this hack here. */
 		if (database.format->params.label &&
-		    (!strncmp(database.format->params.label, "wpapsk", 6) ||
-		     !strncmp(database.format->params.label, "wowsrp", 6)) &&
+		    (!strncmp(database.format->params.label, "WPAPSK", 6) ||
+		     !strncmp(database.format->params.label, "WoWSRP", 6)) &&
 		    options.force_minlength < 8) {
 			options.force_minlength = 8;
 			if (john_main_process)
@@ -1150,6 +1190,9 @@ static void john_run(void)
 		if (options.flags & FLG_INC_CHK)
 			do_incremental_crack(&database, options.charset);
 		else
+		if (options.flags & FLG_MASK_CHK)
+			do_mask_crack(&database, options.mask);
+		else
 		if (options.flags & FLG_MKV_CHK)
 			do_markov_crack(&database, options.mkv_param);
 		else
@@ -1173,6 +1216,7 @@ static void john_run(void)
 
 		tty_done();
 
+		if (options.verbosity > 1)
 		if (john_main_process && database.password_count < remaining) {
 			char *might = "Warning: passwords printed above might";
 			char *partial = " be partial";
@@ -1223,8 +1267,7 @@ static void john_done(void)
 	log_done();
 #ifdef HAVE_OPENCL
 	if (!(options.flags & FLG_FORK) || john_main_process)
-		//Release OpenCL stuff.
-		clean_opencl_environment();
+		opencl_done();
 #endif
 
 	miner_start();

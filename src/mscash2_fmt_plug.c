@@ -60,7 +60,7 @@
 #include "unicode.h"
 #include "options.h"
 #include "unicode.h"
-#include "sha.h"
+#include <openssl/sha.h>
 #include "md4.h"
 #include "sse-intrinsics.h"
 #include "loader.h"
@@ -738,6 +738,7 @@ struct fmt_main fmt_mscash2 = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_SPLIT_UNIFIES_CASE | FMT_OMP | FMT_UNICODE | FMT_UTF8,
 		tests
 	}, {

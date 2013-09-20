@@ -41,51 +41,42 @@
  *
  * Return 0 on success; or -1 on error.
  */
-int lordrafa_crypto_scrypt(const uint8_t * __passwd, size_t __passwdlen,
+extern int crypto_scrypt(const uint8_t * __passwd, size_t __passwdlen,
     const uint8_t * __salt, size_t __saltlen,
     uint64_t __N, uint32_t __r, uint32_t __p,
     uint8_t * __buf, size_t __buflen);
 
 typedef struct {
-	void * rom_base, * rom_aligned;
-	size_t rom_size;
-	uint64_t rom_N;
-	uint32_t rom_r;
-	void * ram_base, * ram_aligned;
-	size_t ram_size;
-} escrypt_ctx_t;
+	void * base, * aligned;
+	size_t size;
+} escrypt_region_t;
 
-int escrypt_init(escrypt_ctx_t * __ctx,
-    uint64_t __rom_N, uint32_t __rom_r,
-    const uint8_t * __param, size_t __paramlen);
+typedef escrypt_region_t escrypt_local_t;
 
-int escrypt_free(escrypt_ctx_t * __ctx);
+extern int escrypt_init_local(escrypt_local_t * __local);
 
-int escrypt_kdf(escrypt_ctx_t * __ctx,
+extern int escrypt_free_local(escrypt_local_t * __local);
+
+extern int escrypt_kdf(escrypt_local_t * __local,
     const uint8_t * __passwd, size_t __passwdlen,
     const uint8_t * __salt, size_t __saltlen,
     uint64_t __N, uint32_t __r, uint32_t __p,
-    int __defeat_tmto,
     uint8_t * __buf, size_t __buflen);
 
-uint8_t *
-escrypt_r(escrypt_ctx_t * __ctx,
+extern uint8_t * escrypt_r(escrypt_local_t * __local,
     const uint8_t * __passwd, size_t __passwdlen,
     const uint8_t * __setting,
     uint8_t * __buf, size_t __buflen);
 
-uint8_t *
-escrypt(const uint8_t * __passwd, const uint8_t * __setting);
+extern uint8_t * escrypt(const uint8_t * __passwd, const uint8_t * __setting);
 
-uint8_t *
-escrypt_gensalt_r(uint32_t __N_log2, uint32_t __r, uint32_t __p,
-    int __defeat_tmto,
+extern uint8_t * escrypt_gensalt_r(
+    uint32_t __N_log2, uint32_t __r, uint32_t __p,
     const uint8_t * __src, size_t __srclen,
     uint8_t * __buf, size_t __buflen);
 
-uint8_t *
-escrypt_gensalt(uint32_t __N_log2, uint32_t __r, uint32_t __p,
-    int __defeat_tmto,
+extern uint8_t * escrypt_gensalt(
+    uint32_t __N_log2, uint32_t __r, uint32_t __p,
     const uint8_t * __src, size_t __srclen);
 
 #endif /* !_CRYPTO_SCRYPT_H_ */

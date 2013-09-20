@@ -58,6 +58,7 @@
 static struct fmt_tests tests[] = {
 	{"admin$nMjFM0rdC9iOc+xIFsGEm3LtAeGZhn", "password"},
 	{"a$nMf9FkrCIgHGccRAxsBAwxBtDtPHfn", "netscreen"},
+	{"admin$nDa2MErEKCsMcuQOTsLNpGCtKJAq5n", "QUESTIONDEFENSE"},
 	{NULL}
 };
 
@@ -270,6 +271,7 @@ struct fmt_main fmt_NS = {
 		DEFAULT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT,
 		tests
 	}, {

@@ -16,7 +16,7 @@
 #include "params.h"
 #include "options.h"
 #include "base64.h"
-#include "crypto_scrypt.h"
+#include "escrypt/crypto_scrypt.h"
 #ifdef _OPENMP
 static int omp_t = 1;
 #include <omp.h>
@@ -27,7 +27,15 @@ static int omp_t = 1;
 #define FORMAT_NAME		""
 #define FORMAT_TAG		"scrypt"
 #define TAG_LENGTH		6
-#define ALGORITHM_NAME		"32/" ARCH_BITS_STR
+#ifdef __XOP__
+#define ALGORITHM_NAME		"Salsa20/8 128/128 XOP"
+#elif defined(__AVX__)
+#define ALGORITHM_NAME		"Salsa20/8 128/128 AVX"
+#elif defined(__SSE2__)
+#define ALGORITHM_NAME		"Salsa20/8 128/128 SSE2"
+#else
+#define ALGORITHM_NAME		"Salsa20/8 32/" ARCH_BITS_STR
+#endif
 #define BENCHMARK_COMMENT	""
 #define BENCHMARK_LENGTH	-1
 #define PLAINTEXT_LENGTH	125
@@ -174,7 +182,7 @@ static int crypt_all(int *pcount, struct db_salt *salt)
 	{
 		crypto_scrypt((unsigned char*)saved_key[index], strlen((char*)saved_key[index]),
 				cur_salt->salt, strlen((char*)cur_salt->salt),
-				1 << cur_salt->N, cur_salt->r,
+				(1ULL) << cur_salt->N, cur_salt->r,
 				cur_salt->p, (unsigned char*)crypt_out[index],
 				BINARY_SIZE);
 	}
@@ -216,7 +224,7 @@ static char *get_key(int index)
 	return saved_key[index];
 }
 
-struct fmt_main fmt_scrypt = {
+struct fmt_main fmt_django_scrypt = {
 	{
 		FORMAT_LABEL,
 		FORMAT_NAME,
@@ -230,6 +238,7 @@ struct fmt_main fmt_scrypt = {
 		SALT_ALIGN,
 		MIN_KEYS_PER_CRYPT,
 		MAX_KEYS_PER_CRYPT,
+		0,
 		FMT_CASE | FMT_8_BIT | FMT_OMP,
 		scrypt_tests
 	}, {
