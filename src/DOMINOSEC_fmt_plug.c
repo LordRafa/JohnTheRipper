@@ -53,6 +53,7 @@ static int omp_t = 1;
 static unsigned char (*key_digest)[DIGEST_SIZE];
 static char (*saved_key)[PLAINTEXT_LENGTH+1];
 static ARCH_WORD_32 (*crypt_out)[(DIGEST_SIZE + 3) / sizeof(ARCH_WORD_32)];
+static ARCH_WORD_32 (*crypt_key)[(DIGEST_SIZE + 3) / sizeof(ARCH_WORD_32)];
 static unsigned char salt_and_digest[WTFSIZE] = "saalt(................................)";
 
 static const char *hex_table[] = {
@@ -201,15 +202,21 @@ static void mdtransform(unsigned char state[16], unsigned char checksum[16], uns
 	memcpy(x, state, 16);
 	memcpy(x+16, block, 16);
 
-	for(i=0;i<16;i++)
+	for(i=0;i<16;i+=2) {
 		x[i+32] = state[i] ^ block[i];
+		x[i+33] = state[i+1] ^ block[i+1];
+	}
 
 	for (i = 0; i < 18; ++i)
 	{
 		pt = (unsigned char*)&x;
-		for (j = 48; j > 0; j--)
+		for (j = 48; j > 0; j-=2)
 		{
 			*pt ^= lotus_magic_table[j+t];
+			t = *pt;
+			pt++;
+
+			*pt ^= lotus_magic_table[j+t-1];
 			t = *pt;
 			pt++;
 		}
@@ -218,11 +225,15 @@ static void mdtransform(unsigned char state[16], unsigned char checksum[16], uns
 	memcpy(state, x, 16);
 
 	t = checksum[15];
-	for (i = 0; i < 16; i++)
+	for (i = 0; i < 16; i+=2)
 	{
 		c = lotus_magic_table[block[i]^t];
 		checksum[i] ^= c;
 		t = checksum[i];
+
+		c = lotus_magic_table[block[i+1]^t];
+		checksum[i+1] ^= c;
+		t = checksum[i+1];
 	}
 }
 
@@ -235,15 +246,21 @@ static void mdtransform_norecalc(unsigned char state[16], unsigned char block[16
 	memcpy(x, state, 16);
 	memcpy(x+16, block, 16);
 
-	for(i=0;i<16;i++)
+	for(i=0;i<16;i+=2) {
 		x[i+32] = state[i] ^ block[i];
+		x[i+33] = state[i+1] ^ block[i+1];
+	}
 
 	for(i = 0; i < 18; ++i)
 	{
 		pt = (unsigned char*)&x;
-		for (j = 48; j > 0; j--)
+		for (j = 48; j > 0; j-=2)
 		{
 			*pt ^= lotus_magic_table[j+t];
+			t = *pt;
+			pt++;
+
+			*pt ^= lotus_magic_table[j+t-1];
 			t = *pt;
 			pt++;
 		}
@@ -298,7 +315,11 @@ static int valid(char *ciphertext, struct fmt_main *self)
 		ciphertext[CIPHERTEXT_LENGTH-1] != ')')
 		return 0;
 
-	for (i = 1; i < CIPHERTEXT_LENGTH-1; ++i) {
+	for (i = 1; i < CIPHERTEXT_LENGTH-1; i+=2) {
+		ch = ciphertext[i];
+		if (!isalnum(ch) && ch != '+' && ch != '/')
+			return 0;
+
 		ch = ciphertext[i];
 		if (!isalnum(ch) && ch != '+' && ch != '/')
 			return 0;
@@ -333,28 +354,48 @@ static void decode(unsigned char *ascii_cipher, unsigned char *binary)
 			loop = 2; /* ~ loop = proper_mul(13 - apsik); */
 			apsik += loop*6;
 
-			do {
-				out <<= 6;
-				ch = *ascii_cipher;
+			out <<= 6;
+			ch = *ascii_cipher;
 
-				if (ch < '0' || ch > '9')
-					if (ch < 'A' || ch > 'Z')
-						if (ch < 'a' || ch > 'z')
-							if (ch != '+')
-								if (ch == '/')
-									out += '?';
-								else
-									; /* shit happens */
+			if (ch < '0' || ch > '9')
+				if (ch < 'A' || ch > 'Z')
+					if (ch < 'a' || ch > 'z')
+						if (ch != '+')
+							if (ch == '/')
+								out += '?';
 							else
-								out += '>';
+								; /* shit happens */
 						else
-							out += ch-'=';
+							out += '>';
 					else
-						out += ch-'7';
+						out += ch-'=';
 				else
-					out += ch-'0';
-				++ascii_cipher;
-			} while (--loop);
+					out += ch-'7';
+			else
+				out += ch-'0';
+			++ascii_cipher;
+
+			out <<= 6;
+			ch = *ascii_cipher;
+
+			if (ch < '0' || ch > '9')
+				if (ch < 'A' || ch > 'Z')
+					if (ch < 'a' || ch > 'z')
+						if (ch != '+')
+							if (ch == '/')
+								out += '?';
+							else
+								; /* shit happens */
+						else
+							out += '>';
+					else
+						out += ch-'=';
+				else
+					out += ch-'7';
+			else
+				out += ch-'0';
+			++ascii_cipher;
+
 		}
 
 		loop = apsik-8;
@@ -451,6 +492,18 @@ static int cmp_exact(char *source, int index)
 {
 	return 1;
 }
+
+static int get_hash1(int index) { return crypt_key[index][0] & 0xf; }
+static int get_hash2(int index) { return crypt_key[index][0] & 0xff; }
+static int get_hash3(int index) { return crypt_key[index][0] & 0xfff; }
+static int get_hash4(int index) { return crypt_key[index][0] & 0xffff; }
+static int get_hash5(int index) { return crypt_key[index][0] & 0xfffff; }
+
+static int binary_hash1(void * binary) { return *(ARCH_WORD_32 *)binary & 0xf; }
+static int binary_hash2(void * binary) { return *(ARCH_WORD_32 *)binary & 0xff; }
+static int binary_hash3(void * binary) { return *(ARCH_WORD_32 *)binary & 0xfff; }
+static int binary_hash4(void * binary) { return *(ARCH_WORD_32 *)binary & 0xffff; }
+static int binary_hash5(void * binary) { return *(ARCH_WORD_32 *)binary & 0xfffff; }
 
 struct fmt_main fmt_DOMINOSEC = {
 	{
